@@ -16,6 +16,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import database as db
+import version_manager as vm
 
 # ─── Colour / Style constants ──────────────────────────────────────────────────
 
@@ -1837,12 +1838,108 @@ class SettingsTab(ttk.Frame):
             self._log(f"    └─ {f['description']}")
 
 
+class VersionManagerDialog(tk.Toplevel):
+    def __init__(self, parent, on_change=None):
+        super().__init__(parent)
+        self.on_change = on_change
+        self.title("Version Manager")
+        self.geometry("420x280")
+        self.resizable(False, False)
+        self._build()
+        self._refresh()
+        self.grab_set()
+
+    def _build(self):
+        main = ttk.Frame(self, padding=12)
+        main.pack(fill="both", expand=True)
+
+        ttk.Label(main, text="Current Version", font=FONT_LG).pack(anchor="w")
+        self.lbl_ver = ttk.Label(main, text="", font=("Calibri", 14, "bold"), foreground=ACCENT)
+        self.lbl_ver.pack(anchor="w", pady=(2, 10))
+
+        btn_frame = ttk.Frame(main)
+        btn_frame.pack(fill="x", pady=4)
+        btn(btn_frame, "+ Build", self._bump_build, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Patch", self._bump_patch, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Minor", self._bump_minor, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Major", self._bump_major, "Accent.TButton").pack(side="left", padx=3)
+
+        set_frame = lframe(main, "Set Exact Version")
+        set_frame.pack(fill="x", pady=8)
+
+        self.var_major = tk.StringVar()
+        self.var_minor = tk.StringVar()
+        self.var_patch = tk.StringVar()
+        self.var_build = tk.StringVar()
+
+        ttk.Label(set_frame, text="Major").grid(row=0, column=0, padx=4, pady=3)
+        ttk.Entry(set_frame, textvariable=self.var_major, width=6).grid(row=0, column=1, padx=4)
+        ttk.Label(set_frame, text="Minor").grid(row=0, column=2, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_minor, width=6).grid(row=0, column=3, padx=4)
+        ttk.Label(set_frame, text="Patch").grid(row=0, column=4, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_patch, width=6).grid(row=0, column=5, padx=4)
+        ttk.Label(set_frame, text="Build").grid(row=0, column=6, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_build, width=6).grid(row=0, column=7, padx=4)
+
+        btn(set_frame, "Apply Version", self._set_version).grid(row=1, column=0, columnspan=8, pady=6)
+
+        self.lbl_status = ttk.Label(main, text="", foreground=MUTED)
+        self.lbl_status.pack(anchor="w", pady=(4, 0))
+
+        bottom = ttk.Frame(main)
+        bottom.pack(fill="x", side="bottom", pady=(10, 0))
+        btn(bottom, "Close", self.destroy).pack(side="right")
+
+    def _refresh(self):
+        data = vm.get_version_data()
+        self.lbl_ver.config(text=vm.get_version_string())
+        self.var_major.set(str(data["major"]))
+        self.var_minor.set(str(data["minor"]))
+        self.var_patch.set(str(data["patch"]))
+        self.var_build.set(str(data["build"]))
+
+    def _notify_change(self):
+        self._refresh()
+        if self.on_change:
+            self.on_change(vm.get_version_string())
+
+    def _bump_build(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_build()}")
+        self._notify_change()
+
+    def _bump_patch(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_patch()}")
+        self._notify_change()
+
+    def _bump_minor(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_minor()}")
+        self._notify_change()
+
+    def _bump_major(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_major()}")
+        self._notify_change()
+
+    def _set_version(self):
+        try:
+            major = int(self.var_major.get().strip())
+            minor = int(self.var_minor.get().strip())
+            patch = int(self.var_patch.get().strip())
+            build = int(self.var_build.get().strip())
+        except ValueError:
+            messagebox.showerror("Invalid", "Version numbers must be integers.", parent=self)
+            return
+        version_text = vm.set_version(major, minor, patch, build)
+        self.lbl_status.config(text=f"Updated: {version_text}")
+        self._notify_change()
+
+
 # ─── Main Application Window ───────────────────────────────────────────────────
 
 class TheraTrakApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("TheraTrak Pro")
+        self._version = vm.get_version_string()
+        self.title(f"TheraTrak Pro - {self._version}")
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
         win_w = min(1280, screen_w - 40)
@@ -1873,6 +1970,9 @@ class TheraTrakApp(tk.Tk):
                  font=("Calibri", 20, "bold")).pack(side="left", padx=16, pady=10)
         tk.Label(hdr, text="Combined Therapy & Billing", bg=HDR_BG, fg="#93c5fd",
                  font=("Calibri", 10)).pack(side="left", padx=2)
+        self._lbl_version = tk.Label(hdr, text=self._version, bg=HDR_BG, fg="#bfdbfe",
+                         font=("Calibri", 9, "bold"))
+        self._lbl_version.pack(side="left", padx=10)
 
         stats = tk.Frame(hdr, bg=HDR_BG)
         stats.pack(side="right", padx=14)
@@ -1930,6 +2030,7 @@ class TheraTrakApp(tk.Tk):
         menubar.add_cascade(label="Navigate", menu=nav_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Version Manager", command=self._open_version_manager)
         help_menu.add_command(label="About TheraTrak Pro", command=self._about)
         help_menu.add_command(label="Data Migration Help",  command=self._migration_help)
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -1937,9 +2038,15 @@ class TheraTrakApp(tk.Tk):
         self.config(menu=menubar)
 
     def _update_stats(self):
+        self._version = vm.get_version_string()
+        self.title(f"TheraTrak Pro - {self._version}")
+        self._lbl_version.config(text=self._version)
         n = db.count_patients("Active")
         self._lbl_pts.config(text=f"Active Patients: {n}")
         self._lbl_date.config(text=date.today().strftime("%A, %B %d, %Y"))
+
+    def _open_version_manager(self):
+        VersionManagerDialog(self, on_change=lambda _: self._update_stats())
 
     def _backup_db(self):
         from shutil import copy2
@@ -1955,6 +2062,7 @@ class TheraTrakApp(tk.Tk):
         messagebox.showinfo(
             "About TheraTrak Pro",
             "TheraTrak Pro\n"
+            f"Version: {self._version}\n"
             "Combined Therapy Practice Management & CMS-1500 Billing\n\n"
             "Combines:\n"
             "  • Notes 444 (H: drive) – therapy session notes\n"
