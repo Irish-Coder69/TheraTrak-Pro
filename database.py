@@ -9,7 +9,9 @@ import secrets
 from pathlib import Path
 from datetime import date
 
-DB_PATH = Path(__file__).parent / "theratrak.db"
+from app_paths import DB_FILE
+
+DB_PATH = DB_FILE
 
 
 # ─── Connection ────────────────────────────────────────────────────────────────
@@ -177,7 +179,9 @@ def initialize_db():
         password_hash    TEXT NOT NULL,
         password_salt    TEXT NOT NULL,
         first_name       TEXT NOT NULL,
+        middle_name      TEXT DEFAULT '',
         last_name        TEXT NOT NULL,
+        suffix           TEXT DEFAULT '',
         email            TEXT DEFAULT '',
         phone            TEXT DEFAULT '',
         role             TEXT DEFAULT 'User',
@@ -185,6 +189,12 @@ def initialize_db():
         city             TEXT DEFAULT '',
         state            TEXT DEFAULT '',
         zip              TEXT DEFAULT '',
+        license_number   TEXT DEFAULT '',
+        npi_number       TEXT DEFAULT '',
+        billing_address  TEXT DEFAULT '',
+        billing_city     TEXT DEFAULT '',
+        billing_state    TEXT DEFAULT '',
+        billing_zip      TEXT DEFAULT '',
         is_active        INTEGER DEFAULT 1,
         created_at       TEXT DEFAULT (datetime('now')),
         last_login       TEXT DEFAULT ''
@@ -198,7 +208,30 @@ def initialize_db():
     conn.commit()
     conn.close()
 
+    _migrate_users_table()
     _seed_dsm_codes()
+
+
+def _migrate_users_table():
+    """Add any missing columns to an existing users table (forward migration)."""
+    new_columns = [
+        ("middle_name",      "TEXT DEFAULT ''"),
+        ("suffix",           "TEXT DEFAULT ''"),
+        ("license_number",   "TEXT DEFAULT ''"),
+        ("npi_number",       "TEXT DEFAULT ''"),
+        ("billing_address",  "TEXT DEFAULT ''"),
+        ("billing_city",     "TEXT DEFAULT ''"),
+        ("billing_state",    "TEXT DEFAULT ''"),
+        ("billing_zip",      "TEXT DEFAULT ''"),
+    ]
+    conn = get_connection()
+    cur = conn.cursor()
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
+    for col, col_def in new_columns:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+    conn.commit()
+    conn.close()
 
 
 def _seed_dsm_codes():
@@ -561,15 +594,18 @@ def create_user(data: dict):
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO users
-           (username, password_hash, password_salt, first_name, last_name, email,
-            phone, role, address, city, state, zip, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+           (username, password_hash, password_salt, first_name, middle_name, last_name, suffix, email,
+            phone, role, address, city, state, zip, license_number, npi_number,
+            billing_address, billing_city, billing_state, billing_zip, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
         (
             username,
             password_hash,
             salt_hex,
             first_name,
+            (data.get("middle_name") or "").strip(),
             last_name,
+            (data.get("suffix") or "").strip(),
             (data.get("email") or "").strip(),
             (data.get("phone") or "").strip(),
             (data.get("role") or "User").strip() or "User",
@@ -577,6 +613,12 @@ def create_user(data: dict):
             (data.get("city") or "").strip(),
             (data.get("state") or "").strip(),
             (data.get("zip") or "").strip(),
+            (data.get("license_number") or "").strip(),
+            (data.get("npi_number") or "").strip(),
+            (data.get("billing_address") or "").strip(),
+            (data.get("billing_city") or "").strip(),
+            (data.get("billing_state") or "").strip(),
+            (data.get("billing_zip") or "").strip(),
         )
     )
     uid = cur.lastrowid
@@ -612,7 +654,7 @@ def verify_user_credentials(username: str, password: str):
 def get_all_users():
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, username, first_name, last_name, email, phone, role, address, city, state, zip, is_active, created_at, last_login FROM users ORDER BY username"
+        "SELECT id, username, first_name, middle_name, last_name, suffix, email, phone, role, address, city, state, zip, license_number, npi_number, billing_address, billing_city, billing_state, billing_zip, is_active, created_at, last_login FROM users ORDER BY username"
     ).fetchall()
     conn.close()
     return rows

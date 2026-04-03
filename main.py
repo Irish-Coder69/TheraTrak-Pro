@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import database as db
 import version_manager as vm
+from app_paths import ICON_FILE
 
 # ─── Colour / Style constants ──────────────────────────────────────────────────
 
@@ -32,11 +33,11 @@ ROW_ODD  = "#ffffff"
 ROW_EVEN = "#eff6ff"
 SEL_BG   = "#bfdbfe"
 
-FONT_UI   = ("Calibri", 10)
-FONT_SM   = ("Calibri", 9)
-FONT_LG   = ("Calibri", 12, "bold")
-FONT_H1   = ("Calibri", 16, "bold")
-FONT_MONO = ("Consolas", 9)
+FONT_UI   = ("Arial", 12)
+FONT_SM   = ("Arial", 12)
+FONT_LG   = ("Arial", 12, "bold")
+FONT_H1   = ("Arial", 12, "bold")
+FONT_MONO = ("Arial", 12)
 
 SESSION_TYPES  = ["Individual", "Group", "Couples/Family", "Intake/Evaluation", "Crisis", "Telehealth"]
 PLACE_CODES    = [("11 – Office", "11"), ("02 – Telehealth", "02"), ("12 – Home", "12"),
@@ -59,6 +60,10 @@ def ttk_style():
         style.theme_use("clam")
     except Exception:
         pass
+    # Force Arial 12 as the default for all classic Tk widgets
+    style.master.option_add("*Font", ("Arial", 12))
+    style.master.option_add("*Text.Font", ("Arial", 12))
+    style.master.option_add("*Entry.Font", ("Arial", 12))
     style.configure("TFrame",       background=BG)
     style.configure("TLabel",       background=BG, font=FONT_UI)
     style.configure("TButton",      font=FONT_UI, padding=4)
@@ -66,19 +71,19 @@ def ttk_style():
     style.configure("TCombobox",    font=FONT_UI)
     style.configure("TNotebook",    background=HDR_BG, tabmargins=[2, 4, 2, 0])
     style.configure("TNotebook.Tab",background=HDR_BG, foreground="white",
-                    font=("Calibri", 10, "bold"), padding=[10, 5])
+                    font=("Arial", 12, "bold"), padding=[10, 5])
     style.map("TNotebook.Tab",
               background=[("selected", BG), ("active", ACCENT)],
               foreground=[("selected", HDR_BG), ("active", "white")])
     style.configure("Accent.TButton", background=ACCENT,  foreground="white",
-                    font=("Calibri", 10, "bold"), padding=5)
+                    font=("Arial", 12, "bold"), padding=5)
     style.map("Accent.TButton",
               background=[("active", ACCENT2), ("pressed", ACCENT2)])
     style.configure("Danger.TButton", background=DANGER, foreground="white",
-                    font=("Calibri", 10, "bold"), padding=5)
+                    font=("Arial", 12, "bold"), padding=5)
     style.configure("Treeview",       font=FONT_UI, rowheight=24,
                     background=ROW_ODD, fieldbackground=ROW_ODD)
-    style.configure("Treeview.Heading", font=("Calibri", 10, "bold"),
+    style.configure("Treeview.Heading", font=("Arial", 12, "bold"),
                     background=HDR_BG, foreground="white")
     style.map("Treeview", background=[("selected", SEL_BG)],
               foreground=[("selected", "#1e3a5f")])
@@ -132,9 +137,18 @@ def fmt_money(v) -> str:
         return "$0.00"
 
 
+def apply_window_icon(window):
+    try:
+        if ICON_FILE.exists():
+            window.iconbitmap(default=str(ICON_FILE))
+    except tk.TclError:
+        pass
+
+
 class UserDirectoryDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("User Directory")
         self.geometry("860x430")
         self.resizable(True, True)
@@ -229,6 +243,7 @@ class UserDirectoryDialog(tk.Toplevel):
 class CreateAccountDialog(tk.Toplevel):
     def __init__(self, parent, after_create=None):
         super().__init__(parent)
+        apply_window_icon(self)
         self.after_create = after_create
         self.title("Create Account")
         screen_w = self.winfo_screenwidth()
@@ -240,6 +255,8 @@ class CreateAccountDialog(tk.Toplevel):
         except tk.TclError:
             pass
         self._vars = {}
+        self._billing_widgets = {}
+        self._same_addr_var = tk.BooleanVar(value=False)
         self._build()
         self.grab_set()
 
@@ -249,62 +266,179 @@ class CreateAccountDialog(tk.Toplevel):
         return v
 
     def _build(self):
-        frm = ttk.Frame(self, padding=12)
-        frm.pack(fill="both", expand=True)
-        for c in range(4):
-            frm.columnconfigure(c, weight=1)
+        outer = ttk.Frame(self)
+        outer.pack(fill="both", expand=True)
+        outer.columnconfigure(0, weight=1)  # left spacer
+        outer.columnconfigure(1, weight=0)  # content
+        outer.columnconfigure(2, weight=1)  # right spacer
+        outer.rowconfigure(0, weight=1)
 
-        ttk.Label(frm, text="Create User Account", font=FONT_H1).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        frm = ttk.Frame(outer, padding=20)
+        frm.grid(row=0, column=1, sticky="n", pady=120)
+        frm.columnconfigure(0, weight=0, minsize=130)
+        frm.columnconfigure(1, weight=0, minsize=200)
+        frm.columnconfigure(2, weight=0, minsize=40)  # spacer
+        frm.columnconfigure(3, weight=0, minsize=160)
+        frm.columnconfigure(4, weight=0, minsize=200)
 
-        ttk.Label(frm, text="Username*").grid(row=1, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("username"), width=24).grid(row=1, column=1, sticky="w")
+        # ── Title ────────────────────────────────────────────────
+        ttk.Label(frm, text="Create User Account", font=FONT_H1).grid(
+            row=0, column=0, columnspan=5, sticky="w", pady=(0, 10))
 
-        ttk.Label(frm, text="Password*").grid(row=1, column=2, sticky="e", padx=4)
-        ttk.Entry(frm, textvariable=self._field("password"), show="*", width=24).grid(row=1, column=3, sticky="w")
+        # ── Row 1: First Name | Username ─────────────────────────
+        ttk.Label(frm, text="First Name*").grid(row=1, column=0, sticky="e", padx=4, pady=4)
+        _e_first = ttk.Entry(frm, textvariable=self._field("first_name"), width=24)
+        _e_first.grid(row=1, column=1, sticky="w")
+        ttk.Label(frm, text="Username*").grid(row=1, column=3, sticky="e", padx=4, pady=4)
+        _e_username = ttk.Entry(frm, textvariable=self._field("username"), width=24)
+        _e_username.grid(row=1, column=4, sticky="w")
 
-        ttk.Label(frm, text="Confirm Password*").grid(row=2, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("confirm_password"), show="*", width=24).grid(row=2, column=1, sticky="w")
+        # ── Row 2: Middle Name | Password ────────────────────────
+        ttk.Label(frm, text="Middle Name").grid(row=2, column=0, sticky="e", padx=4, pady=4)
+        _e_middle = ttk.Entry(frm, textvariable=self._field("middle_name"), width=24)
+        _e_middle.grid(row=2, column=1, sticky="w")
+        ttk.Label(frm, text="Password*").grid(row=2, column=3, sticky="e", padx=4, pady=4)
+        _e_password = ttk.Entry(frm, textvariable=self._field("password"), show="*", width=24)
+        _e_password.grid(row=2, column=4, sticky="w")
 
-        ttk.Label(frm, text="Role").grid(row=2, column=2, sticky="e", padx=4)
-        ttk.Combobox(frm, textvariable=self._field("role", "User"), values=["Admin", "User", "Billing", "ReadOnly"], width=21, state="readonly").grid(row=2, column=3, sticky="w")
+        # ── Row 3: Last Name | Confirm Password ──────────────────
+        ttk.Label(frm, text="Last Name*").grid(row=3, column=0, sticky="e", padx=4, pady=4)
+        _e_last = ttk.Entry(frm, textvariable=self._field("last_name"), width=24)
+        _e_last.grid(row=3, column=1, sticky="w")
+        ttk.Label(frm, text="Confirm Password*").grid(row=3, column=3, sticky="e", padx=4, pady=4)
+        _e_confirm = ttk.Entry(frm, textvariable=self._field("confirm_password"), show="*", width=24)
+        _e_confirm.grid(row=3, column=4, sticky="w")
 
-        ttk.Label(frm, text="First Name*").grid(row=3, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("first_name"), width=24).grid(row=3, column=1, sticky="w")
+        # ── Row 4: Suffix | Show Password toggle ──────────────────
+        _show_pw_var = tk.BooleanVar(value=False)
+        def _toggle_show_pw():
+            ch = "" if _show_pw_var.get() else "*"
+            _e_password.config(show=ch)
+            _e_confirm.config(show=ch)
+        ttk.Label(frm, text="Suffix").grid(row=4, column=0, sticky="e", padx=4, pady=4)
+        _cb_suffix = ttk.Combobox(frm, textvariable=self._field("suffix"),
+                     values=["", "PhD", "PsyD", "LCSW", "LMFT", "LPC", "LCPC", "MSW", "MA", "MS",
+                             "MD", "DO", "NP", "PA", "RN", "EdD", "DSW", "DMin"],
+                     width=12, state="readonly")
+        _cb_suffix.grid(row=4, column=1, sticky="w")
+        ttk.Checkbutton(
+            frm, text="Show Password", variable=_show_pw_var,
+            command=_toggle_show_pw
+        ).grid(row=4, column=3, columnspan=2, sticky="w", padx=4, pady=4)
 
-        ttk.Label(frm, text="Last Name*").grid(row=3, column=2, sticky="e", padx=4)
-        ttk.Entry(frm, textvariable=self._field("last_name"), width=24).grid(row=3, column=3, sticky="w")
+        # ── Row 5: Phone | Role ───────────────────────────────────
+        ttk.Label(frm, text="Phone").grid(row=5, column=0, sticky="e", padx=4, pady=4)
+        _e_phone = ttk.Entry(frm, textvariable=self._field("phone"), width=24)
+        _e_phone.grid(row=5, column=1, sticky="w")
+        ttk.Label(frm, text="Role").grid(row=5, column=3, sticky="e", padx=4, pady=4)
+        _cb_role = ttk.Combobox(frm, textvariable=self._field("role", "User"),
+                     values=["Admin", "User", "Billing", "ReadOnly"],
+                     width=21, state="readonly")
+        _cb_role.grid(row=5, column=4, sticky="w")
 
-        ttk.Label(frm, text="Email").grid(row=4, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("email"), width=24).grid(row=4, column=1, sticky="w")
+        # ── Row 6: Email | (empty right) ─────────────────────────
+        ttk.Label(frm, text="Email").grid(row=6, column=0, sticky="e", padx=4, pady=4)
+        _e_email = ttk.Entry(frm, textvariable=self._field("email"), width=24)
+        _e_email.grid(row=6, column=1, sticky="w")
 
-        ttk.Label(frm, text="Phone").grid(row=4, column=2, sticky="e", padx=4)
-        ttk.Entry(frm, textvariable=self._field("phone"), width=24).grid(row=4, column=3, sticky="w")
+        # ── Mailing Address header ────────────────────────────────
+        ttk.Separator(frm, orient="horizontal").grid(row=7, column=0, columnspan=2, sticky="ew", pady=(10, 2))
+        ttk.Label(frm, text="Mailing Address", font=FONT_LG).grid(row=8, column=0, columnspan=2, sticky="w", padx=4, pady=(0, 2))
 
-        ttk.Label(frm, text="Address").grid(row=5, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("address"), width=52).grid(row=5, column=1, columnspan=3, sticky="w")
+        # ── Billing Address header (same row) ─────────────────────
+        ttk.Separator(frm, orient="horizontal").grid(row=7, column=3, columnspan=2, sticky="ew", pady=(10, 2))
+        ttk.Label(frm, text="Billing Address", font=FONT_LG).grid(row=8, column=3, columnspan=2, sticky="w", padx=4, pady=(0, 2))
+        ttk.Checkbutton(
+            frm, text="Same as mailing address",
+            variable=self._same_addr_var,
+            command=self._toggle_same_addr
+        ).grid(row=9, column=3, columnspan=2, sticky="w", padx=4, pady=(0, 4))
 
-        ttk.Label(frm, text="City").grid(row=6, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("city"), width=24).grid(row=6, column=1, sticky="w")
+        # ── Mailing | Billing fields ──────────────────────────────
+        ttk.Label(frm, text="Address").grid(row=9, column=0, sticky="e", padx=4, pady=4)
+        _e_address = ttk.Entry(frm, textvariable=self._field("address"), width=28)
+        _e_address.grid(row=9, column=1, sticky="w")
 
-        ttk.Label(frm, text="State").grid(row=6, column=2, sticky="e", padx=4)
-        ttk.Combobox(
-            frm,
-            textvariable=self._field("state"),
-            values=STATES,
-            width=8,
-            state="readonly"
-        ).grid(row=6, column=3, sticky="w")
+        ttk.Label(frm, text="Billing Address").grid(row=10, column=3, sticky="e", padx=4, pady=4)
+        _ba = ttk.Entry(frm, textvariable=self._field("billing_address"), width=24)
+        _ba.grid(row=10, column=4, sticky="w")
+        self._billing_widgets["billing_address"] = _ba
 
-        ttk.Label(frm, text="Zip").grid(row=7, column=0, sticky="e", padx=4, pady=4)
-        ttk.Entry(frm, textvariable=self._field("zip"), width=12).grid(row=7, column=1, sticky="w")
+        ttk.Label(frm, text="City").grid(row=10, column=0, sticky="e", padx=4, pady=4)
+        _e_city = ttk.Entry(frm, textvariable=self._field("city"), width=24)
+        _e_city.grid(row=10, column=1, sticky="w")
 
+        ttk.Label(frm, text="Billing City").grid(row=11, column=3, sticky="e", padx=4, pady=4)
+        _bc = ttk.Entry(frm, textvariable=self._field("billing_city"), width=24)
+        _bc.grid(row=11, column=4, sticky="w")
+        self._billing_widgets["billing_city"] = _bc
+
+        ttk.Label(frm, text="State").grid(row=11, column=0, sticky="e", padx=4, pady=4)
+        _cb_state = ttk.Combobox(frm, textvariable=self._field("state"), values=STATES, width=8, state="readonly")
+        _cb_state.grid(row=11, column=1, sticky="w")
+
+        ttk.Label(frm, text="Billing State").grid(row=12, column=3, sticky="e", padx=4, pady=4)
+        _bs = ttk.Combobox(frm, textvariable=self._field("billing_state"), values=STATES, width=8, state="readonly")
+        _bs.grid(row=12, column=4, sticky="w")
+        self._billing_widgets["billing_state"] = _bs
+
+        ttk.Label(frm, text="Zip").grid(row=12, column=0, sticky="e", padx=4, pady=4)
+        _e_zip = ttk.Entry(frm, textvariable=self._field("zip"), width=12)
+        _e_zip.grid(row=12, column=1, sticky="w")
+
+        ttk.Label(frm, text="Billing Zip").grid(row=13, column=3, sticky="e", padx=4, pady=4)
+        _bz = ttk.Entry(frm, textvariable=self._field("billing_zip"), width=12)
+        _bz.grid(row=13, column=4, sticky="w")
+        self._billing_widgets["billing_zip"] = _bz
+
+        # ── License / NPI ─────────────────────────────────────────
+        ttk.Label(frm, text="License Number*").grid(row=13, column=0, sticky="e", padx=4, pady=4)
+        _e_license = ttk.Entry(frm, textvariable=self._field("license_number"), width=24)
+        _e_license.grid(row=13, column=1, sticky="w")
+
+        ttk.Label(frm, text="NPI Number*").grid(row=14, column=0, sticky="e", padx=4, pady=4)
+        _e_npi = ttk.Entry(frm, textvariable=self._field("npi_number"), width=24)
+        _e_npi.grid(row=14, column=1, sticky="w")
+
+        # ── Tab order: left column top→bottom, then right column ──
+        self._set_tab_order([
+            _e_first, _e_middle, _e_last, _cb_suffix, _e_phone, _e_email,
+            _e_address, _e_city, _cb_state, _e_zip, _e_license, _e_npi,
+            _e_username, _e_password, _e_confirm, _cb_role,
+            self._billing_widgets["billing_address"],
+            self._billing_widgets["billing_city"],
+            self._billing_widgets["billing_state"],
+            self._billing_widgets["billing_zip"],
+        ])
+
+        # ── Footer ────────────────────────────────────────────────
         msg = "Password must be at least 8 characters. Required fields are marked with *"
-        ttk.Label(frm, text=msg, foreground=MUTED).grid(row=8, column=0, columnspan=4, sticky="w", pady=(6, 2))
+        ttk.Label(frm, text=msg, foreground=MUTED).grid(row=15, column=0, columnspan=5, sticky="w", pady=(6, 2))
 
         bottom = ttk.Frame(frm)
-        bottom.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        bottom.grid(row=16, column=0, columnspan=5, sticky="ew", pady=(10, 0))
         btn(bottom, "Create Account", self._create, "Accent.TButton").pack(side="left", padx=4)
         btn(bottom, "Cancel", self.destroy).pack(side="left")
+
+    def _set_tab_order(self, widgets):
+        """Bind Tab/Shift-Tab to enforce left-column-first traversal."""
+        for i, w in enumerate(widgets):
+            nw = widgets[(i + 1) % len(widgets)]
+            pw = widgets[(i - 1) % len(widgets)]
+            w.bind("<Tab>", lambda e, nw=nw: nw.focus_set() or "break")
+            w.bind("<Shift-Tab>", lambda e, pw=pw: pw.focus_set() or "break")
+
+    def _toggle_same_addr(self):
+        if self._same_addr_var.get():
+            self._vars["billing_address"].set(self._vars.get("address", tk.StringVar()).get())
+            self._vars["billing_city"].set(self._vars.get("city", tk.StringVar()).get())
+            self._vars["billing_state"].set(self._vars.get("state", tk.StringVar()).get())
+            self._vars["billing_zip"].set(self._vars.get("zip", tk.StringVar()).get())
+            for w in self._billing_widgets.values():
+                w.config(state="disabled")
+        else:
+            for w in self._billing_widgets.values():
+                w.config(state="normal" if not isinstance(w, ttk.Combobox) else "readonly")
 
     def _create(self):
         data = {k: v.get().strip() for k, v in self._vars.items()}
@@ -332,6 +466,7 @@ class CreateAccountDialog(tk.Toplevel):
 class LoginDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
+        apply_window_icon(self)
         self.user = None
         self.title("TheraTrak Pro Login")
         screen_w = self.winfo_screenwidth()
@@ -370,6 +505,15 @@ class LoginDialog(tk.Toplevel):
         ttk.Label(row2, text="Password", width=12).pack(side="left")
         e_pass = ttk.Entry(row2, textvariable=self.v_pass, width=30, show="*")
         e_pass.pack(side="left")
+
+        _show_pw_var = tk.BooleanVar(value=False)
+        row3 = ttk.Frame(center)
+        row3.pack()
+        ttk.Label(row3, width=12).pack(side="left")  # spacer to align with labels above
+        ttk.Checkbutton(
+            row3, text="Show Password", variable=_show_pw_var,
+            command=lambda: e_pass.config(show="" if _show_pw_var.get() else "*")
+        ).pack(side="left")
 
         self.lbl_msg = ttk.Label(center, text="", foreground=DANGER)
         self.lbl_msg.pack(anchor="center", pady=(5, 2))
@@ -417,6 +561,7 @@ class LoginDialog(tk.Toplevel):
 class DSMPicker(tk.Toplevel):
     def __init__(self, parent, callback):
         super().__init__(parent)
+        apply_window_icon(self)
         self.title("DSM-5 / ICD-10 Code Lookup")
         self.geometry("680x480")
         self.resizable(True, True)
@@ -483,6 +628,7 @@ class DSMPicker(tk.Toplevel):
 class PatientDialog(tk.Toplevel):
     def __init__(self, parent, pid=None, on_save=None):
         super().__init__(parent)
+        apply_window_icon(self)
         self.pid = pid
         self.on_save = on_save
         self.title("Edit Patient" if pid else "New Patient")
@@ -679,6 +825,7 @@ class PatientDialog(tk.Toplevel):
 class SessionDialog(tk.Toplevel):
     def __init__(self, parent, sid=None, pid=None, on_save=None):
         super().__init__(parent)
+        apply_window_icon(self)
         self.sid = sid
         self.pid = pid
         self.on_save = on_save
@@ -849,6 +996,7 @@ class SessionDialog(tk.Toplevel):
 class BillingDialog(tk.Toplevel):
     def __init__(self, parent, rid=None, pid=None, on_save=None):
         super().__init__(parent)
+        apply_window_icon(self)
         self.rid = rid
         self.pid = pid
         self.on_save = on_save
@@ -2218,6 +2366,7 @@ class VersionManagerDialog(tk.Toplevel):
 class TheraTrakApp(tk.Tk):
     def __init__(self, current_user=None):
         super().__init__()
+        apply_window_icon(self)
         self.current_user = current_user
         self._version = vm.get_version_string()
         self.title(f"TheraTrak Pro - {self._version}")

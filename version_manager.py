@@ -4,10 +4,10 @@ Stores semantic version and build metadata in version.json.
 """
 
 import json
-from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-VERSION_FILE = BASE_DIR / "version.json"
+from app_paths import APP_ROOT, VERSION_FILE
+
+BASE_DIR = APP_ROOT
 
 DEFAULT_VERSION = {
     "major": 1,

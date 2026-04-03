@@ -9,7 +9,7 @@ if not exist main.py (
     exit /b 1
 )
 
-echo Starting TheraTrak Pro...
+echo Starting TheraTrak Pro (debug mode)...
 python main.py
 if %errorlevel% neq 0 (
     echo.
