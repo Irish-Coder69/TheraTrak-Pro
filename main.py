@@ -231,8 +231,14 @@ class CreateAccountDialog(tk.Toplevel):
         super().__init__(parent)
         self.after_create = after_create
         self.title("Create Account")
-        self.geometry("640x520")
-        self.resizable(False, False)
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        self.geometry(f"{max(1000, screen_w - 30)}x{max(700, screen_h - 90)}+0+0")
+        self.resizable(True, True)
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            pass
         self._vars = {}
         self._build()
         self.grab_set()
@@ -322,8 +328,14 @@ class LoginDialog(tk.Toplevel):
         super().__init__(parent)
         self.user = None
         self.title("TheraTrak Pro Login")
-        self.geometry("470x280")
-        self.resizable(False, False)
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        self.geometry(f"{max(1000, screen_w - 30)}x{max(700, screen_h - 90)}+0+0")
+        self.resizable(True, True)
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            pass
         self._build()
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self._cancel)
