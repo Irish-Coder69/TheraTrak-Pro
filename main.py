@@ -287,7 +287,13 @@ class CreateAccountDialog(tk.Toplevel):
         ttk.Entry(frm, textvariable=self._field("city"), width=24).grid(row=6, column=1, sticky="w")
 
         ttk.Label(frm, text="State").grid(row=6, column=2, sticky="e", padx=4)
-        ttk.Combobox(frm, textvariable=self._field("state"), values=STATES, width=8, state="readonly").grid(row=6, column=3, sticky="w")
+        ttk.Combobox(
+            frm,
+            textvariable=self._field("state"),
+            values=STATES,
+            width=8,
+            state="readonly"
+        ).grid(row=6, column=3, sticky="w")
 
         ttk.Label(frm, text="Zip").grid(row=7, column=0, sticky="e", padx=4, pady=4)
         ttk.Entry(frm, textvariable=self._field("zip"), width=12).grid(row=7, column=1, sticky="w")
