@@ -3,6 +3,9 @@ TheraTrak Pro – Database layer (SQLite)
 """
 import sqlite3
 import json
+import hashlib
+import hmac
+import secrets
 from pathlib import Path
 from datetime import date
 
@@ -166,6 +169,25 @@ def initialize_db():
         description      TEXT NOT NULL,
         category         TEXT DEFAULT '',
         is_favorite      INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        username         TEXT NOT NULL UNIQUE,
+        password_hash    TEXT NOT NULL,
+        password_salt    TEXT NOT NULL,
+        first_name       TEXT NOT NULL,
+        last_name        TEXT NOT NULL,
+        email            TEXT DEFAULT '',
+        phone            TEXT DEFAULT '',
+        role             TEXT DEFAULT 'User',
+        address          TEXT DEFAULT '',
+        city             TEXT DEFAULT '',
+        state            TEXT DEFAULT '',
+        zip              TEXT DEFAULT '',
+        is_active        INTEGER DEFAULT 1,
+        created_at       TEXT DEFAULT (datetime('now')),
+        last_login       TEXT DEFAULT ''
     );
     """)
 
@@ -487,3 +509,110 @@ def toggle_dsm_favorite(code):
     )
     conn.commit()
     conn.close()
+
+
+# ─── Users / Authentication ───────────────────────────────────────────────────
+
+def _hash_password(password: str, salt_hex: str) -> str:
+    salt = bytes.fromhex(salt_hex)
+    hashed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
+    return hashed.hex()
+
+
+def _new_salt_hex() -> str:
+    return secrets.token_hex(16)
+
+
+def count_users() -> int:
+    conn = get_connection()
+    n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    conn.close()
+    return n
+
+
+def get_user_by_username(username: str):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM users WHERE lower(username)=lower(?)",
+        (username.strip(),)
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def create_user(data: dict):
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+
+    if not username or not password or not first_name or not last_name:
+        raise ValueError("Username, password, first name, and last name are required.")
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+
+    if get_user_by_username(username):
+        raise ValueError("Username already exists.")
+
+    salt_hex = _new_salt_hex()
+    password_hash = _hash_password(password, salt_hex)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """INSERT INTO users
+           (username, password_hash, password_salt, first_name, last_name, email,
+            phone, role, address, city, state, zip, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+        (
+            username,
+            password_hash,
+            salt_hex,
+            first_name,
+            last_name,
+            (data.get("email") or "").strip(),
+            (data.get("phone") or "").strip(),
+            (data.get("role") or "User").strip() or "User",
+            (data.get("address") or "").strip(),
+            (data.get("city") or "").strip(),
+            (data.get("state") or "").strip(),
+            (data.get("zip") or "").strip(),
+        )
+    )
+    uid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return uid
+
+
+def verify_user_credentials(username: str, password: str):
+    row = get_user_by_username(username)
+    if not row or not row["is_active"]:
+        return None
+
+    actual_hash = row["password_hash"] or ""
+    test_hash = _hash_password(password, row["password_salt"])
+    if not hmac.compare_digest(actual_hash, test_hash):
+        return None
+
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET last_login=datetime('now') WHERE id=?",
+        (row["id"],)
+    )
+    conn.commit()
+    conn.close()
+
+    conn = get_connection()
+    refreshed = conn.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+    conn.close()
+    return refreshed if refreshed else row
+
+
+def get_all_users():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, username, first_name, last_name, email, phone, role, address, city, state, zip, is_active, created_at, last_login FROM users ORDER BY username"
+    ).fetchall()
+    conn.close()
+    return rows

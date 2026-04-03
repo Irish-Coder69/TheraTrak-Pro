@@ -132,6 +132,265 @@ def fmt_money(v) -> str:
         return "$0.00"
 
 
+class UserDirectoryDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("User Directory")
+        self.geometry("860x430")
+        self.resizable(True, True)
+        self._build()
+        self._load_users()
+        self.grab_set()
+
+    def _build(self):
+        container = ttk.Frame(self, padding=8)
+        container.pack(fill="both", expand=True)
+
+        left = ttk.Frame(container)
+        left.pack(side="left", fill="both", expand=True)
+
+        cols = ("id", "username", "name", "role", "email", "phone", "active")
+        self.tv = ttk.Treeview(left, columns=cols, show="headings", selectmode="browse")
+        for c, h, w in [
+            ("id", "ID", 40),
+            ("username", "Username", 120),
+            ("name", "Name", 170),
+            ("role", "Role", 90),
+            ("email", "Email", 180),
+            ("phone", "Phone", 110),
+            ("active", "Active", 70),
+        ]:
+            self.tv.heading(c, text=h, anchor="w")
+            self.tv.column(c, width=w, stretch=c in ("name", "email"))
+
+        vsb = ttk.Scrollbar(left, orient="vertical", command=self.tv.yview)
+        self.tv.configure(yscrollcommand=vsb.set)
+        self.tv.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+        self.tv.bind("<<TreeviewSelect>>", self._show_details)
+
+        right = lframe(container, "Selected User Details")
+        right.pack(side="left", fill="y", padx=(8, 0))
+        self.details = tk.Text(right, width=34, height=20, font=FONT_MONO, state="disabled")
+        self.details.pack(fill="both", expand=True)
+
+        bottom = ttk.Frame(self, padding=8)
+        bottom.pack(fill="x")
+        btn(bottom, "Refresh", self._load_users).pack(side="left")
+        btn(bottom, "Close", self.destroy).pack(side="right")
+
+    def _load_users(self):
+        self._rows = db.get_all_users()
+        self.tv.delete(*self.tv.get_children())
+        for r in self._rows:
+            name = f"{r['first_name']} {r['last_name']}"
+            self.tv.insert(
+                "",
+                "end",
+                iid=str(r["id"]),
+                values=(
+                    r["id"],
+                    r["username"],
+                    name,
+                    r["role"],
+                    r["email"],
+                    r["phone"],
+                    "Yes" if r["is_active"] else "No",
+                ),
+            )
+
+    def _show_details(self, event=None):
+        sel = self.tv.selection()
+        if not sel:
+            return
+        uid = int(sel[0])
+        row = next((r for r in self._rows if r["id"] == uid), None)
+        if not row:
+            return
+        lines = [
+            f"ID: {row['id']}",
+            f"Username: {row['username']}",
+            f"Name: {row['first_name']} {row['last_name']}",
+            f"Role: {row['role']}",
+            f"Email: {row['email']}",
+            f"Phone: {row['phone']}",
+            f"Address: {row['address']}",
+            f"City/State/Zip: {row['city']} {row['state']} {row['zip']}",
+            f"Active: {'Yes' if row['is_active'] else 'No'}",
+            f"Created: {row['created_at']}",
+            f"Last Login: {row['last_login'] or 'Never'}",
+        ]
+        self.details.config(state="normal")
+        self.details.delete("1.0", "end")
+        self.details.insert("1.0", "\n".join(lines))
+        self.details.config(state="disabled")
+
+
+class CreateAccountDialog(tk.Toplevel):
+    def __init__(self, parent, after_create=None):
+        super().__init__(parent)
+        self.after_create = after_create
+        self.title("Create Account")
+        self.geometry("640x520")
+        self.resizable(False, False)
+        self._vars = {}
+        self._build()
+        self.grab_set()
+
+    def _field(self, name, default=""):
+        v = tk.StringVar(value=default)
+        self._vars[name] = v
+        return v
+
+    def _build(self):
+        frm = ttk.Frame(self, padding=12)
+        frm.pack(fill="both", expand=True)
+        for c in range(4):
+            frm.columnconfigure(c, weight=1)
+
+        ttk.Label(frm, text="Create User Account", font=FONT_H1).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+
+        ttk.Label(frm, text="Username*").grid(row=1, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("username"), width=24).grid(row=1, column=1, sticky="w")
+
+        ttk.Label(frm, text="Password*").grid(row=1, column=2, sticky="e", padx=4)
+        ttk.Entry(frm, textvariable=self._field("password"), show="*", width=24).grid(row=1, column=3, sticky="w")
+
+        ttk.Label(frm, text="Confirm Password*").grid(row=2, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("confirm_password"), show="*", width=24).grid(row=2, column=1, sticky="w")
+
+        ttk.Label(frm, text="Role").grid(row=2, column=2, sticky="e", padx=4)
+        ttk.Combobox(frm, textvariable=self._field("role", "User"), values=["Admin", "User", "Billing", "ReadOnly"], width=21, state="readonly").grid(row=2, column=3, sticky="w")
+
+        ttk.Label(frm, text="First Name*").grid(row=3, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("first_name"), width=24).grid(row=3, column=1, sticky="w")
+
+        ttk.Label(frm, text="Last Name*").grid(row=3, column=2, sticky="e", padx=4)
+        ttk.Entry(frm, textvariable=self._field("last_name"), width=24).grid(row=3, column=3, sticky="w")
+
+        ttk.Label(frm, text="Email").grid(row=4, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("email"), width=24).grid(row=4, column=1, sticky="w")
+
+        ttk.Label(frm, text="Phone").grid(row=4, column=2, sticky="e", padx=4)
+        ttk.Entry(frm, textvariable=self._field("phone"), width=24).grid(row=4, column=3, sticky="w")
+
+        ttk.Label(frm, text="Address").grid(row=5, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("address"), width=52).grid(row=5, column=1, columnspan=3, sticky="w")
+
+        ttk.Label(frm, text="City").grid(row=6, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("city"), width=24).grid(row=6, column=1, sticky="w")
+
+        ttk.Label(frm, text="State").grid(row=6, column=2, sticky="e", padx=4)
+        ttk.Combobox(frm, textvariable=self._field("state"), values=STATES, width=8, state="readonly").grid(row=6, column=3, sticky="w")
+
+        ttk.Label(frm, text="Zip").grid(row=7, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(frm, textvariable=self._field("zip"), width=12).grid(row=7, column=1, sticky="w")
+
+        msg = "Password must be at least 8 characters. Required fields are marked with *"
+        ttk.Label(frm, text=msg, foreground=MUTED).grid(row=8, column=0, columnspan=4, sticky="w", pady=(6, 2))
+
+        bottom = ttk.Frame(frm)
+        bottom.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        btn(bottom, "Create Account", self._create, "Accent.TButton").pack(side="left", padx=4)
+        btn(bottom, "Cancel", self.destroy).pack(side="left")
+
+    def _create(self):
+        data = {k: v.get().strip() for k, v in self._vars.items()}
+        password = data.pop("password", "")
+        confirm_password = data.pop("confirm_password", "")
+        if password != confirm_password:
+            messagebox.showerror("Password", "Password and confirm password do not match.", parent=self)
+            return
+        data["password"] = password
+        try:
+            db.create_user(data)
+        except ValueError as ex:
+            messagebox.showerror("Create Account", str(ex), parent=self)
+            return
+        except Exception as ex:
+            messagebox.showerror("Create Account", f"Could not create account: {ex}", parent=self)
+            return
+
+        messagebox.showinfo("Account Created", "User account created successfully.", parent=self)
+        if self.after_create:
+            self.after_create(data.get("username", ""))
+        self.destroy()
+
+
+class LoginDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.user = None
+        self.title("TheraTrak Pro Login")
+        self.geometry("470x280")
+        self.resizable(False, False)
+        self._build()
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+    def _build(self):
+        frm = ttk.Frame(self, padding=12)
+        frm.pack(fill="both", expand=True)
+
+        ttk.Label(frm, text="TheraTrak Pro", font=FONT_H1).pack(anchor="w")
+        ttk.Label(frm, text=f"Version {vm.get_version_string()}", foreground=MUTED).pack(anchor="w", pady=(0, 10))
+
+        self.v_user = tk.StringVar()
+        self.v_pass = tk.StringVar()
+
+        row1 = ttk.Frame(frm)
+        row1.pack(fill="x", pady=3)
+        ttk.Label(row1, text="Username", width=12).pack(side="left")
+        e_user = ttk.Entry(row1, textvariable=self.v_user, width=30)
+        e_user.pack(side="left")
+
+        row2 = ttk.Frame(frm)
+        row2.pack(fill="x", pady=3)
+        ttk.Label(row2, text="Password", width=12).pack(side="left")
+        e_pass = ttk.Entry(row2, textvariable=self.v_pass, width=30, show="*")
+        e_pass.pack(side="left")
+
+        self.lbl_msg = ttk.Label(frm, text="", foreground=DANGER)
+        self.lbl_msg.pack(anchor="w", pady=(5, 2))
+
+        action = ttk.Frame(frm)
+        action.pack(fill="x", pady=(8, 0))
+        btn(action, "Login", self._login, "Accent.TButton").pack(side="left", padx=3)
+        btn(action, "Create Account", self._open_create).pack(side="left", padx=3)
+        btn(action, "View Users", self._open_users).pack(side="left", padx=3)
+        btn(action, "Exit", self._cancel).pack(side="right", padx=3)
+
+        first_use = db.count_users() == 0
+        if first_use:
+            self.lbl_msg.config(text="No users found. Please create the first account.")
+
+        e_user.focus_set()
+        self.bind("<Return>", lambda e: self._login())
+
+    def _open_users(self):
+        UserDirectoryDialog(self)
+
+    def _open_create(self):
+        CreateAccountDialog(self, after_create=lambda u: self.v_user.set(u))
+
+    def _login(self):
+        username = self.v_user.get().strip()
+        password = self.v_pass.get()
+        if not username or not password:
+            self.lbl_msg.config(text="Enter username and password.")
+            return
+        user = db.verify_user_credentials(username, password)
+        if not user:
+            self.lbl_msg.config(text="Invalid username or password.")
+            return
+        self.user = user
+        self.destroy()
+
+    def _cancel(self):
+        self.user = None
+        self.destroy()
+
+
 # ─── DSM Picker Dialog ─────────────────────────────────────────────────────────
 
 class DSMPicker(tk.Toplevel):
@@ -1936,8 +2195,9 @@ class VersionManagerDialog(tk.Toplevel):
 # ─── Main Application Window ───────────────────────────────────────────────────
 
 class TheraTrakApp(tk.Tk):
-    def __init__(self):
+    def __init__(self, current_user=None):
         super().__init__()
+        self.current_user = current_user
         self._version = vm.get_version_string()
         self.title(f"TheraTrak Pro - {self._version}")
         screen_w = self.winfo_screenwidth()
@@ -1978,8 +2238,10 @@ class TheraTrakApp(tk.Tk):
         stats.pack(side="right", padx=14)
         self._lbl_date  = tk.Label(stats, text="", bg=HDR_BG, fg="#93c5fd", font=FONT_SM)
         self._lbl_pts   = tk.Label(stats, text="", bg=HDR_BG, fg="#93c5fd", font=FONT_SM)
+        self._lbl_user  = tk.Label(stats, text="", bg=HDR_BG, fg="#bfdbfe", font=FONT_SM)
         self._lbl_date.pack(side="bottom", anchor="e")
         self._lbl_pts.pack(side="bottom", anchor="e")
+        self._lbl_user.pack(side="bottom", anchor="e")
 
     def _build_notebook(self):
         self.nb = ttk.Notebook(self)
@@ -2015,6 +2277,8 @@ class TheraTrakApp(tk.Tk):
         file_menu.add_command(label="New Patient",    command=lambda: PatientDialog(self, on_save=lambda _: self.tab_patients.refresh()))
         file_menu.add_command(label="New Session",    command=lambda: SessionDialog(self, on_save=lambda _: self.tab_sessions.refresh()))
         file_menu.add_separator()
+        file_menu.add_command(label="User Directory", command=self._open_user_directory)
+        file_menu.add_separator()
         file_menu.add_command(label="Backup Database", command=self._backup_db)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._on_close)
@@ -2044,9 +2308,21 @@ class TheraTrakApp(tk.Tk):
         n = db.count_patients("Active")
         self._lbl_pts.config(text=f"Active Patients: {n}")
         self._lbl_date.config(text=date.today().strftime("%A, %B %d, %Y"))
+        if self.current_user:
+            who = f"{self.current_user['first_name']} {self.current_user['last_name']} ({self.current_user['username']})"
+            self._lbl_user.config(text=f"Logged In: {who}")
+        else:
+            self._lbl_user.config(text="Logged In: —")
+
+    def set_logged_in_user(self, user):
+        self.current_user = user
+        self._update_stats()
 
     def _open_version_manager(self):
         VersionManagerDialog(self, on_change=lambda _: self._update_stats())
+
+    def _open_user_directory(self):
+        UserDirectoryDialog(self)
 
     def _backup_db(self):
         from shutil import copy2
@@ -2059,10 +2335,14 @@ class TheraTrakApp(tk.Tk):
             messagebox.showinfo("Backup", f"Database backed up to:\n{dest}")
 
     def _about(self):
+        user_line = ""
+        if self.current_user:
+            user_line = f"Logged In User: {self.current_user['username']} ({self.current_user['role']})\n"
         messagebox.showinfo(
             "About TheraTrak Pro",
             "TheraTrak Pro\n"
             f"Version: {self._version}\n"
+            f"{user_line}"
             "Combined Therapy Practice Management & CMS-1500 Billing\n\n"
             "Combines:\n"
             "  • Notes 444 (H: drive) – therapy session notes\n"
@@ -2102,5 +2382,16 @@ class TheraTrakApp(tk.Tk):
 # ─── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    db.initialize_db()
     app = TheraTrakApp()
-    app.mainloop()
+    app.withdraw()
+
+    login = LoginDialog(app)
+    app.wait_window(login)
+
+    if login.user:
+        app.set_logged_in_user(login.user)
+        app.deiconify()
+        app.mainloop()
+    else:
+        app.destroy()

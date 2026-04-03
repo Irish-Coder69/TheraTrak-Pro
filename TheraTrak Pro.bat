@@ -1,5 +1,15 @@
 @echo off
 cd /d "%~dp0"
+
+if not exist main.py (
+    echo.
+    echo ERROR: main.py was not found in this folder.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Starting TheraTrak Pro...
 python main.py
 if %errorlevel% neq 0 (
     echo.
