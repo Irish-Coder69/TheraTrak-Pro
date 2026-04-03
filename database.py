@@ -1,0 +1,489 @@
+"""
+TheraTrak Pro – Database layer (SQLite)
+"""
+import sqlite3
+import json
+from pathlib import Path
+from datetime import date
+
+DB_PATH = Path(__file__).parent / "theratrak.db"
+
+
+# ─── Connection ────────────────────────────────────────────────────────────────
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    return conn
+
+
+# ─── Schema ────────────────────────────────────────────────────────────────────
+
+def initialize_db():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.executescript("""
+    CREATE TABLE IF NOT EXISTS patients (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        last_name        TEXT NOT NULL,
+        first_name       TEXT NOT NULL,
+        middle_name      TEXT DEFAULT '',
+        dob              TEXT DEFAULT '',
+        sex              TEXT DEFAULT 'U',
+        ssn              TEXT DEFAULT '',
+        address          TEXT DEFAULT '',
+        address2         TEXT DEFAULT '',
+        city             TEXT DEFAULT '',
+        state            TEXT DEFAULT '',
+        zip              TEXT DEFAULT '',
+        phone_home       TEXT DEFAULT '',
+        phone_cell       TEXT DEFAULT '',
+        phone_work       TEXT DEFAULT '',
+        email            TEXT DEFAULT '',
+        ins_name         TEXT DEFAULT '',
+        ins_id           TEXT DEFAULT '',
+        ins_group        TEXT DEFAULT '',
+        ins_plan         TEXT DEFAULT '',
+        ins_holder       TEXT DEFAULT '',
+        ins_holder_dob   TEXT DEFAULT '',
+        ins_holder_sex   TEXT DEFAULT '',
+        ins_relation     TEXT DEFAULT 'Self',
+        ins_address      TEXT DEFAULT '',
+        ins_city         TEXT DEFAULT '',
+        ins_state        TEXT DEFAULT '',
+        ins_zip          TEXT DEFAULT '',
+        ins_phone        TEXT DEFAULT '',
+        ins2_name        TEXT DEFAULT '',
+        ins2_id          TEXT DEFAULT '',
+        ins2_group       TEXT DEFAULT '',
+        ins2_plan        TEXT DEFAULT '',
+        ins2_holder      TEXT DEFAULT '',
+        ins2_relation    TEXT DEFAULT '',
+        dx1              TEXT DEFAULT '',
+        dx2              TEXT DEFAULT '',
+        dx3              TEXT DEFAULT '',
+        dx4              TEXT DEFAULT '',
+        emr_name         TEXT DEFAULT '',
+        emr_relation     TEXT DEFAULT '',
+        emr_phone        TEXT DEFAULT '',
+        referring_name   TEXT DEFAULT '',
+        referring_npi    TEXT DEFAULT '',
+        intake_date      TEXT DEFAULT '',
+        status           TEXT DEFAULT 'Active',
+        notes            TEXT DEFAULT '',
+        created_at       TEXT DEFAULT (datetime('now')),
+        updated_at       TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS session_notes (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id       INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        session_date     TEXT NOT NULL,
+        start_time       TEXT DEFAULT '',
+        end_time         TEXT DEFAULT '',
+        duration         INTEGER DEFAULT 50,
+        session_type     TEXT DEFAULT 'Individual',
+        place_of_service TEXT DEFAULT '11',
+        cpt_code         TEXT DEFAULT '90834',
+        cpt_modifier     TEXT DEFAULT '',
+        dx1              TEXT DEFAULT '',
+        dx2              TEXT DEFAULT '',
+        dx3              TEXT DEFAULT '',
+        dx4              TEXT DEFAULT '',
+        fee              REAL DEFAULT 0.0,
+        note_text        TEXT DEFAULT '',
+        goals            TEXT DEFAULT '',
+        interventions    TEXT DEFAULT '',
+        response         TEXT DEFAULT '',
+        plan             TEXT DEFAULT '',
+        signed           INTEGER DEFAULT 0,
+        signed_date      TEXT DEFAULT '',
+        created_at       TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS billing_records (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id       INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        session_id       INTEGER REFERENCES session_notes(id),
+        record_date      TEXT NOT NULL,
+        service_date     TEXT DEFAULT '',
+        description      TEXT DEFAULT '',
+        charge           REAL DEFAULT 0.0,
+        payment          REAL DEFAULT 0.0,
+        payment_type     TEXT DEFAULT '',
+        check_number     TEXT DEFAULT '',
+        ins_payment      REAL DEFAULT 0.0,
+        adjustment       REAL DEFAULT 0.0,
+        balance          REAL DEFAULT 0.0,
+        claim_number     TEXT DEFAULT '',
+        created_at       TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS cms_claims (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id       INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        billing_date     TEXT NOT NULL,
+        claim_status     TEXT DEFAULT 'Draft',
+        form_data        TEXT DEFAULT '{}',
+        submission_date  TEXT DEFAULT '',
+        payer_claim_id   TEXT DEFAULT '',
+        total_charge     REAL DEFAULT 0.0,
+        total_paid       REAL DEFAULT 0.0,
+        created_at       TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS provider_settings (
+        id                INTEGER PRIMARY KEY DEFAULT 1,
+        practice_name     TEXT DEFAULT '',
+        provider_last     TEXT DEFAULT '',
+        provider_first    TEXT DEFAULT '',
+        credentials       TEXT DEFAULT '',
+        npi               TEXT DEFAULT '',
+        tax_id            TEXT DEFAULT '',
+        tax_id_type       TEXT DEFAULT 'EIN',
+        upin              TEXT DEFAULT '',
+        license_num       TEXT DEFAULT '',
+        address           TEXT DEFAULT '',
+        address2          TEXT DEFAULT '',
+        city              TEXT DEFAULT '',
+        state             TEXT DEFAULT '',
+        zip               TEXT DEFAULT '',
+        phone             TEXT DEFAULT '',
+        fax               TEXT DEFAULT '',
+        email             TEXT DEFAULT '',
+        accept_assign     INTEGER DEFAULT 1,
+        sig_on_file       TEXT DEFAULT 'Signature On File',
+        default_pos       TEXT DEFAULT '11',
+        updated_at        TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS dsm_codes (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        code             TEXT NOT NULL UNIQUE,
+        description      TEXT NOT NULL,
+        category         TEXT DEFAULT '',
+        is_favorite      INTEGER DEFAULT 0
+    );
+    """)
+
+    conn.commit()
+
+    # Seed provider row
+    cur.execute("INSERT OR IGNORE INTO provider_settings (id) VALUES (1)")
+    conn.commit()
+    conn.close()
+
+    _seed_dsm_codes()
+
+
+def _seed_dsm_codes():
+    from dsm_codes import DSM_CODES
+    conn = get_connection()
+    cur = conn.cursor()
+    count = cur.execute("SELECT COUNT(*) FROM dsm_codes").fetchone()[0]
+    if count == 0:
+        cur.executemany(
+            "INSERT OR IGNORE INTO dsm_codes (code, description, category) VALUES (?,?,?)",
+            DSM_CODES
+        )
+        conn.commit()
+    conn.close()
+
+
+# ─── Patients ──────────────────────────────────────────────────────────────────
+
+def get_all_patients(status="Active"):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM patients WHERE status=? ORDER BY last_name, first_name",
+        (status,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def search_patients(term, status="Active"):
+    conn = get_connection()
+    like = f"%{term}%"
+    rows = conn.execute(
+        """SELECT * FROM patients
+           WHERE status=? AND (last_name LIKE ? OR first_name LIKE ?
+                               OR phone_home LIKE ? OR phone_cell LIKE ?)
+           ORDER BY last_name, first_name""",
+        (status, like, like, like, like)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_patient(pid):
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM patients WHERE id=?", (pid,)).fetchone()
+    conn.close()
+    return row
+
+
+def save_patient(data: dict):
+    """Insert if no 'id', update otherwise. Returns patient id."""
+    conn = get_connection()
+    cur = conn.cursor()
+    pid = data.pop("id", None)
+    data["updated_at"] = "datetime('now')"
+    cols = list(data.keys())
+    vals = list(data.values())
+    if pid is None:
+        placeholders = ",".join(["?"] * len(cols))
+        col_str = ",".join(cols)
+        cur.execute(f"INSERT INTO patients ({col_str}) VALUES ({placeholders})", vals)
+        pid = cur.lastrowid
+    else:
+        set_str = ",".join([f"{c}=?" for c in cols])
+        vals.append(pid)
+        cur.execute(f"UPDATE patients SET {set_str}, updated_at=datetime('now') WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+    return pid
+
+
+def delete_patient(pid):
+    conn = get_connection()
+    conn.execute("DELETE FROM patients WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
+
+
+def set_patient_status(pid, status):
+    conn = get_connection()
+    conn.execute("UPDATE patients SET status=? WHERE id=?", (status, pid))
+    conn.commit()
+    conn.close()
+
+
+def count_patients(status="Active"):
+    conn = get_connection()
+    n = conn.execute("SELECT COUNT(*) FROM patients WHERE status=?", (status,)).fetchone()[0]
+    conn.close()
+    return n
+
+
+# ─── Session Notes ─────────────────────────────────────────────────────────────
+
+def get_sessions_for_patient(pid):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM session_notes WHERE patient_id=? ORDER BY session_date DESC",
+        (pid,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_sessions_by_date(session_date):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT s.*, p.first_name||' '||p.last_name AS patient_name
+           FROM session_notes s
+           JOIN patients p ON s.patient_id = p.id
+           WHERE s.session_date=? ORDER BY p.last_name""",
+        (session_date,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_recent_sessions(limit=20):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT s.*, p.first_name||' '||p.last_name AS patient_name
+           FROM session_notes s
+           JOIN patients p ON s.patient_id = p.id
+           ORDER BY s.session_date DESC, s.id DESC LIMIT ?""",
+        (limit,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_session(sid):
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM session_notes WHERE id=?", (sid,)).fetchone()
+    conn.close()
+    return row
+
+
+def save_session(data: dict):
+    conn = get_connection()
+    cur = conn.cursor()
+    sid = data.pop("id", None)
+    cols = list(data.keys())
+    vals = list(data.values())
+    if sid is None:
+        placeholders = ",".join(["?"] * len(cols))
+        col_str = ",".join(cols)
+        cur.execute(f"INSERT INTO session_notes ({col_str}) VALUES ({placeholders})", vals)
+        sid = cur.lastrowid
+    else:
+        set_str = ",".join([f"{c}=?" for c in cols])
+        vals.append(sid)
+        cur.execute(f"UPDATE session_notes SET {set_str} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+    return sid
+
+
+def delete_session(sid):
+    conn = get_connection()
+    conn.execute("DELETE FROM session_notes WHERE id=?", (sid,))
+    conn.commit()
+    conn.close()
+
+
+# ─── Billing ───────────────────────────────────────────────────────────────────
+
+def get_billing_for_patient(pid):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM billing_records WHERE patient_id=? ORDER BY record_date DESC, id DESC",
+        (pid,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_patient_balance(pid):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT SUM(charge)-SUM(payment)-SUM(ins_payment)-SUM(adjustment) AS bal FROM billing_records WHERE patient_id=?",
+        (pid,)
+    ).fetchone()
+    conn.close()
+    return round(row["bal"] or 0.0, 2)
+
+
+def save_billing_record(data: dict):
+    conn = get_connection()
+    cur = conn.cursor()
+    rid = data.pop("id", None)
+    cols = list(data.keys())
+    vals = list(data.values())
+    if rid is None:
+        placeholders = ",".join(["?"] * len(cols))
+        col_str = ",".join(cols)
+        cur.execute(f"INSERT INTO billing_records ({col_str}) VALUES ({placeholders})", vals)
+        rid = cur.lastrowid
+    else:
+        set_str = ",".join([f"{c}=?" for c in cols])
+        vals.append(rid)
+        cur.execute(f"UPDATE billing_records SET {set_str} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def delete_billing_record(rid):
+    conn = get_connection()
+    conn.execute("DELETE FROM billing_records WHERE id=?", (rid,))
+    conn.commit()
+    conn.close()
+
+
+def get_billing_summary():
+    """Returns (total_charges, total_payments, total_balance) across all patients."""
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT SUM(charge) AS tc, SUM(payment)+SUM(ins_payment) AS tp,
+                  SUM(charge)-SUM(payment)-SUM(ins_payment)-SUM(adjustment) AS tb
+           FROM billing_records"""
+    ).fetchone()
+    conn.close()
+    return (round(row["tc"] or 0, 2), round(row["tp"] or 0, 2), round(row["tb"] or 0, 2))
+
+
+# ─── CMS Claims ────────────────────────────────────────────────────────────────
+
+def get_claims_for_patient(pid):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM cms_claims WHERE patient_id=? ORDER BY billing_date DESC",
+        (pid,)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def save_claim(data: dict):
+    conn = get_connection()
+    cur = conn.cursor()
+    cid = data.pop("id", None)
+    if isinstance(data.get("form_data"), dict):
+        data["form_data"] = json.dumps(data["form_data"])
+    cols = list(data.keys())
+    vals = list(data.values())
+    if cid is None:
+        placeholders = ",".join(["?"] * len(cols))
+        col_str = ",".join(cols)
+        cur.execute(f"INSERT INTO cms_claims ({col_str}) VALUES ({placeholders})", vals)
+        cid = cur.lastrowid
+    else:
+        set_str = ",".join([f"{c}=?" for c in cols])
+        vals.append(cid)
+        cur.execute(f"UPDATE cms_claims SET {set_str} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+    return cid
+
+
+# ─── Provider Settings ─────────────────────────────────────────────────────────
+
+def get_provider():
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM provider_settings WHERE id=1").fetchone()
+    conn.close()
+    return dict(row) if row else {}
+
+
+def save_provider(data: dict):
+    data.pop("id", None)
+    cols = list(data.keys())
+    vals = list(data.values())
+    set_str = ",".join([f"{c}=?" for c in cols])
+    conn = get_connection()
+    conn.execute(
+        f"UPDATE provider_settings SET {set_str}, updated_at=datetime('now') WHERE id=1",
+        vals
+    )
+    conn.commit()
+    conn.close()
+
+
+# ─── DSM Codes ─────────────────────────────────────────────────────────────────
+
+def search_dsm(term):
+    conn = get_connection()
+    like = f"%{term}%"
+    rows = conn.execute(
+        "SELECT * FROM dsm_codes WHERE code LIKE ? OR description LIKE ? ORDER BY is_favorite DESC, code",
+        (like, like)
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_all_dsm():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM dsm_codes ORDER BY is_favorite DESC, code").fetchall()
+    conn.close()
+    return rows
+
+
+def toggle_dsm_favorite(code):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE dsm_codes SET is_favorite = CASE WHEN is_favorite=1 THEN 0 ELSE 1 END WHERE code=?",
+        (code,)
+    )
+    conn.commit()
+    conn.close()
