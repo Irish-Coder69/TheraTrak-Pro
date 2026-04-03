@@ -344,33 +344,36 @@ class LoginDialog(tk.Toplevel):
         frm = ttk.Frame(self, padding=12)
         frm.pack(fill="both", expand=True)
 
-        ttk.Label(frm, text="TheraTrak Pro", font=FONT_H1).pack(anchor="w")
-        ttk.Label(frm, text=f"Version {vm.get_version_string()}", foreground=MUTED).pack(anchor="w", pady=(0, 10))
+        center = ttk.Frame(frm)
+        center.pack(expand=True)
+
+        ttk.Label(center, text="TheraTrak Pro", font=FONT_H1).pack(anchor="center")
+        ttk.Label(center, text=f"Version {vm.get_version_string()}", foreground=MUTED).pack(anchor="center", pady=(0, 10))
 
         self.v_user = tk.StringVar()
         self.v_pass = tk.StringVar()
 
-        row1 = ttk.Frame(frm)
-        row1.pack(fill="x", pady=3)
+        row1 = ttk.Frame(center)
+        row1.pack(pady=3)
         ttk.Label(row1, text="Username", width=12).pack(side="left")
         e_user = ttk.Entry(row1, textvariable=self.v_user, width=30)
         e_user.pack(side="left")
 
-        row2 = ttk.Frame(frm)
-        row2.pack(fill="x", pady=3)
+        row2 = ttk.Frame(center)
+        row2.pack(pady=3)
         ttk.Label(row2, text="Password", width=12).pack(side="left")
         e_pass = ttk.Entry(row2, textvariable=self.v_pass, width=30, show="*")
         e_pass.pack(side="left")
 
-        self.lbl_msg = ttk.Label(frm, text="", foreground=DANGER)
-        self.lbl_msg.pack(anchor="w", pady=(5, 2))
+        self.lbl_msg = ttk.Label(center, text="", foreground=DANGER)
+        self.lbl_msg.pack(anchor="center", pady=(5, 2))
 
-        action = ttk.Frame(frm)
-        action.pack(fill="x", pady=(8, 0))
+        action = ttk.Frame(center)
+        action.pack(pady=(8, 0))
         btn(action, "Login", self._login, "Accent.TButton").pack(side="left", padx=3)
         btn(action, "Create Account", self._open_create).pack(side="left", padx=3)
         btn(action, "View Users", self._open_users).pack(side="left", padx=3)
-        btn(action, "Exit", self._cancel).pack(side="right", padx=3)
+        btn(action, "Exit", self._cancel).pack(side="left", padx=3)
 
         first_use = db.count_users() == 0
         if first_use:
