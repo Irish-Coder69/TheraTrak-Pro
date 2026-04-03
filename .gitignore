@@ -5,3 +5,8 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
