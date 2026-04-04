@@ -1643,189 +1643,185 @@ class CMS1500Tab(ttk.Frame):
 
         self._refresh_claims()
 
-    def _add_form_preview(self, parent):
-        sample_image = APP_ROOT / "assets" / "cms1500_sample.png"
-        if not sample_image.exists():
-            return 0
-
-        max_width = 980
-        raw_img = None
-        display_img = None
-
-        # Prefer Pillow for reliable PNG support in packaged builds.
-        if Image is not None and ImageTk is not None:
-            try:
-                pil_img = Image.open(sample_image)
-                if pil_img.width > max_width:
-                    ratio = max_width / float(pil_img.width)
-                    new_size = (max_width, int(pil_img.height * ratio))
-                    pil_img = pil_img.resize(new_size, Image.Resampling.LANCZOS)
-                raw_img = pil_img
-                display_img = ImageTk.PhotoImage(pil_img)
-            except Exception:
-                raw_img = None
-                display_img = None
-
-        if display_img is None:
-            try:
-                tk_img = tk.PhotoImage(file=str(sample_image))
-            except tk.TclError:
-                ttk.Label(
-                    parent,
-                    text="CMS-1500 sample form image could not be loaded.",
-                    foreground=DANGER,
-                ).grid(row=0, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 8))
-                return 1
-            scale = max(1, (tk_img.width() + max_width - 1) // max_width)
-            raw_img = tk_img
-            display_img = tk_img.subsample(scale, scale) if scale > 1 else tk_img
-
-        # Keep references alive so Tk does not garbage-collect the image.
-        self._cms_preview_raw = raw_img
-        self._cms_preview_img = display_img
-
-        ttk.Label(
-            parent,
-            text="CMS-1500 Sample Layout",
-            font=FONT_LG,
-            foreground=HDR_BG,
-        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 4))
-
-        tk.Label(
-            parent,
-            image=self._cms_preview_img,
-            bg="white",
-            relief="solid",
-            borderwidth=1,
-        ).grid(row=1, column=0, columnspan=4, sticky="w", padx=4, pady=(0, 10))
-        return 2
-
     def _build_form(self, parent):
-        """Build all CMS-1500 form fields."""
-        self._cv = {}  # field_name -> StringVar
+        """Build the CMS-1500 form directly on top of the provided sample image."""
+        self._cv = {}
+        self._sl_vars = []
 
         def fld(name, default=""):
             v = tk.StringVar(value=default)
             self._cv[name] = v
             return v
 
-        def row(frame, label, fname, r, c=0, w=20, combo=None):
-            ttk.Label(frame, text=label).grid(row=r, column=c, sticky="ne", padx=(8,2), pady=2)
-            if combo:
-                wid = ttk.Combobox(frame, textvariable=fld(fname), values=combo, width=w)
-                wid.grid(row=r, column=c+1, sticky="ew", padx=(0,12), pady=2)
-            else:
-                ttk.Entry(frame, textvariable=fld(fname), width=w).grid(
-                    row=r, column=c+1, sticky="ew", padx=(0,12), pady=2)
+        sample_image = APP_ROOT / "assets" / "cms1500_sample.png"
+        if not sample_image.exists() or Image is None or ImageTk is None:
+            ttk.Label(
+                parent,
+                text="CMS-1500 sample form image is unavailable.",
+                foreground=DANGER,
+            ).grid(row=0, column=0, sticky="w", padx=8, pady=8)
+            return
 
-        parent.columnconfigure(0, weight=0)
-        parent.columnconfigure(1, weight=1)
-        parent.columnconfigure(2, weight=0)
-        parent.columnconfigure(3, weight=1)
+        original = Image.open(sample_image)
+        max_width = 1040
+        scale = min(1.0, max_width / float(original.width))
+        if scale < 1.0:
+            display = original.resize(
+                (int(original.width * scale), int(original.height * scale)),
+                Image.Resampling.LANCZOS,
+            )
+        else:
+            display = original.copy()
 
-        sections = [
-            ("Insurance / Patient", [
-                ("Box 1 – Insurance Type",    "ins_type",       0, 0, 18,
-                 ["Medicare","Medicaid","TRICARE","CHAMPVA","Group Health Plan","FECA","Other"]),
-                ("Box 1a – Insured ID #",     "ins_id",         1, 0, 24, None),
-                ("Box 2 – Patient Name",      "patient_name",   1, 2, 24, None),
-                ("Box 3 – Patient DOB",       "patient_dob",    2, 0, 14, None),
-                ("Box 3 – Patient Sex",       "patient_sex",    2, 2, 6,  ["M","F","U"]),
-                ("Box 4 – Insured Name",      "ins_name",       3, 0, 24, None),
-                ("Box 5 – Patient Address",   "patient_address",3, 2, 26, None),
-                ("Box 5 – City",              "patient_city",   4, 0, 18, None),
-                ("Box 5 – State",             "patient_state",  4, 2, 6,  STATES),
-                ("Box 5 – Zip",               "patient_zip",    5, 0, 12, None),
-                ("Box 6 – Relation to Insured","ins_relation",  5, 2, 14, ["Self","Spouse","Child","Other"]),
-                ("Box 7 – Insured Address",   "ins_address2",   6, 0, 26, None),
-                ("Box 7 – City",              "ins_city2",      6, 2, 18, None),
-                ("Box 7 – State",             "ins_state2",     7, 0, 6,  STATES),
-                ("Box 7 – Zip",               "ins_zip2",       7, 2, 12, None),
-                ("Box 11 – Ins. Policy/Group","ins_group",      8, 0, 18, None),
-                ("Box 11c – Insurance Plan",  "ins_plan",       8, 2, 20, None),
-                ("Box 12 – Patient Signature","patient_sig",    9, 0, 22, None),
-                ("Box 13 – Insured Signature","ins_sig",        9, 2, 22, None),
-            ]),
-            ("Condition / Dates", [
-                ("Box 14 – Date of Illness",        "illness_date",   0, 0, 14, None),
-                ("Box 17 – Referring Provider",     "ref_provider",   1, 0, 24, None),
-                ("Box 17b – Referring NPI",         "ref_npi",        1, 2, 14, None),
-                ("Box 23 – Prior Auth #",           "auth_number",    2, 0, 20, None),
-                ("Box 19 – Additional Info",        "add_info",       2, 2, 28, None),
-            ]),
-            ("Diagnoses (Box 21)", [
-                ("Dx A",  "dx1",  0, 0, 12, None), ("Dx B",  "dx2",  0, 2, 12, None),
-                ("Dx C",  "dx3",  1, 0, 12, None), ("Dx D",  "dx4",  1, 2, 12, None),
-                ("Dx E",  "dx5",  2, 0, 12, None), ("Dx F",  "dx6",  2, 2, 12, None),
-                ("Dx G",  "dx7",  3, 0, 12, None), ("Dx H",  "dx8",  3, 2, 12, None),
-            ]),
-            ("Billing / Provider", [
-                ("Box 25 – Federal Tax ID",         "tax_id",          0, 0, 16, None),
-                ("Box 25 – Tax ID Type",            "tax_id_type",     0, 2, 8, ["EIN","SSN"]),
-                ("Box 26 – Patient Acct #",         "patient_acct",    1, 0, 16, None),
-                ("Box 27 – Accept Assignment?",     "accept_assign",   1, 2, 6, ["YES","NO"]),
-                ("Box 28 – Total Charge",           "total_charge",    2, 0, 14, None),
-                ("Box 29 – Amount Paid",            "amount_paid",     2, 2, 14, None),
-                ("Box 31 – Provider Signature",     "provider_sig",    3, 0, 22, None),
-                ("Box 31 – Billing Date",           "billing_date",    3, 2, 14, None),
-                ("Box 32 – Facility Name",          "facility_name",   4, 0, 24, None),
-                ("Box 32 – Facility Address",       "facility_address",4, 2, 24, None),
-                ("Box 32a – Facility NPI",          "facility_npi",    5, 0, 14, None),
-                ("Box 33 – Billing Provider Name",  "billing_name",    6, 0, 26, None),
-                ("Box 33 – Billing Address",        "billing_address", 6, 2, 26, None),
-                ("Box 33 – Billing Phone",          "billing_phone",   7, 0, 16, None),
-                ("Box 33a – Billing NPI",           "billing_npi",     7, 2, 14, None),
-            ]),
-        ]
+        self._cms_form_pil = display
+        self._cms_form_img = ImageTk.PhotoImage(display)
 
-        # Service lines section
-        self._sl_vars = []  # list of dicts per service line
+        parent.columnconfigure(0, weight=1)
 
-        row_offset = self._add_form_preview(parent)
-        for sec_title, fields in sections:
-            lbl_sec = ttk.Label(parent, text=sec_title, font=FONT_LG,
-                                background=HDR_BG, foreground="white")
-            lbl_sec.grid(row=row_offset, column=0, columnspan=4, sticky="ew",
-                         padx=4, pady=(10, 2))
-            row_offset += 1
-            for (label, fname, r, c, w, combo) in fields:
-                row(parent, label, fname, row_offset + r, c, w, combo)
-            max_r = max(f[2] for f in fields) + 1
-            row_offset += max_r + 1
+        surface = tk.Canvas(
+            parent,
+            width=display.width,
+            height=display.height + 44,
+            bg=BG,
+            highlightthickness=0,
+        )
+        surface.grid(row=0, column=0, sticky="nw", padx=4, pady=4)
+        surface.create_image(0, 0, image=self._cms_form_img, anchor="nw")
+        self._cms_surface = surface
 
-        # Service Lines (Box 24) section
-        sl_lbl = ttk.Label(parent, text="Service Lines – Box 24", font=FONT_LG,
-                           background=HDR_BG, foreground="white")
-        sl_lbl.grid(row=row_offset, column=0, columnspan=4, sticky="ew", padx=4, pady=(10, 2))
-        row_offset += 1
+        def sx(value):
+            return int(round(value * scale))
 
-        sl_headers = ttk.Frame(parent)
-        sl_headers.grid(row=row_offset, column=0, columnspan=4, sticky="ew", padx=4)
-        for i, (ht, hw) in enumerate([("From Date",10),("To Date",10),("POS",5),
-                                       ("CPT",8),("Mod",5),("Dx Ptr",6),("Charge",8),("Units",5),("NPI",12)]):
-            ttk.Label(sl_headers, text=ht, font=("Calibri",9,"bold")).grid(row=0, column=i, padx=3)
-        row_offset += 1
+        def sy(value):
+            return int(round(value * scale))
 
-        for line_num in range(6):
+        field_font = ("Arial", max(8, int(round(11 * scale))))
+        line_font = ("Arial", max(7, int(round(10 * scale))))
+        field_height = max(18, sy(24))
+
+        def add_entry(name, x, y, width, *, height=None, justify="left"):
+            widget = tk.Entry(
+                surface,
+                textvariable=fld(name),
+                font=field_font,
+                bd=0,
+                relief="flat",
+                highlightthickness=0,
+                bg="white",
+                fg="black",
+                insertbackground="black",
+                justify=justify,
+            )
+            surface.create_window(
+                sx(x),
+                sy(y),
+                window=widget,
+                anchor="nw",
+                width=sx(width),
+                height=height or field_height,
+            )
+            return widget
+
+        def add_service_entry(var_map, name, x, y, width, *, justify="left"):
+            var = tk.StringVar()
+            var_map[name] = var
+            widget = tk.Entry(
+                surface,
+                textvariable=var,
+                font=line_font,
+                bd=0,
+                relief="flat",
+                highlightthickness=0,
+                bg="white",
+                fg="black",
+                insertbackground="black",
+                justify=justify,
+            )
+            surface.create_window(
+                sx(x),
+                sy(y),
+                window=widget,
+                anchor="nw",
+                width=sx(width),
+                height=max(16, sy(22)),
+            )
+
+        # Top / patient / insured area
+        add_entry("ins_type", 430, 183, 250)
+        add_entry("ins_id", 760, 208, 360)
+        add_entry("patient_name", 44, 279, 372)
+        add_entry("patient_dob", 492, 281, 110, justify="center")
+        add_entry("patient_sex", 675, 281, 40, justify="center")
+        add_entry("ins_name", 760, 279, 368)
+        add_entry("patient_address", 40, 333, 386)
+        add_entry("ins_relation", 485, 333, 195)
+        add_entry("ins_address2", 760, 333, 368)
+        add_entry("patient_city", 40, 386, 335)
+        add_entry("patient_state", 392, 386, 36, justify="center")
+        add_entry("patient_zip", 40, 444, 158)
+        add_entry("ins_city2", 760, 386, 318)
+        add_entry("ins_state2", 1088, 386, 38, justify="center")
+        add_entry("ins_zip2", 760, 444, 150)
+        add_entry("ins_group", 760, 499, 368)
+        add_entry("ins_plan", 760, 617, 368)
+        add_entry("patient_sig", 110, 738, 338)
+        add_entry("ins_sig", 787, 738, 300)
+
+        # Mid form
+        add_entry("illness_date", 38, 819, 148)
+        add_entry("ref_provider", 38, 876, 370)
+        add_entry("ref_npi", 459, 876, 58)
+        add_entry("add_info", 38, 935, 640)
+        add_entry("auth_number", 760, 990, 368)
+
+        # Diagnosis box
+        add_entry("dx1", 95, 973, 110)
+        add_entry("dx2", 286, 973, 110)
+        add_entry("dx3", 477, 973, 110)
+        add_entry("dx4", 669, 973, 110)
+        add_entry("dx5", 95, 1003, 110)
+        add_entry("dx6", 286, 1003, 110)
+        add_entry("dx7", 477, 1003, 110)
+        add_entry("dx8", 669, 1003, 110)
+
+        # Service lines
+        line_y = [1046, 1103, 1160, 1217, 1274, 1331]
+        for y in line_y:
             sl_row = {}
-            sl_frame = ttk.Frame(parent)
-            sl_frame.grid(row=row_offset, column=0, columnspan=4, sticky="ew", padx=4, pady=1)
-            ttk.Label(sl_frame, text=f"{line_num+1}.", width=2).grid(row=0, column=0)
-            for i, (fname, fw) in enumerate([("from_date",10),("to_date",10),("pos",5),
-                                              ("cpt",8),("modifier",5),("dx_ptr",6),
-                                              ("charge",8),("units",5),("npi",12)]):
-                v = tk.StringVar()
-                sl_row[fname] = v
-                ttk.Entry(sl_frame, textvariable=v, width=fw).grid(row=0, column=i+1, padx=2)
+            add_service_entry(sl_row, "from_date", 47, y, 108)
+            add_service_entry(sl_row, "to_date", 162, y, 108)
+            add_service_entry(sl_row, "pos", 285, y, 40, justify="center")
+            add_service_entry(sl_row, "cpt", 369, y, 96, justify="center")
+            add_service_entry(sl_row, "modifier", 468, y, 110, justify="center")
+            add_service_entry(sl_row, "dx_ptr", 648, y, 60, justify="center")
+            add_service_entry(sl_row, "charge", 769, y, 84, justify="right")
+            add_service_entry(sl_row, "units", 872, y, 42, justify="center")
+            add_service_entry(sl_row, "npi", 1000, y, 124, justify="center")
             self._sl_vars.append(sl_row)
-            row_offset += 1
 
-        # Lookup button for diagnoses
-        dx_btn_frame = ttk.Frame(parent)
-        dx_btn_frame.grid(row=row_offset, column=0, columnspan=4, sticky="w", padx=4, pady=4)
-        ttk.Button(dx_btn_frame, text="Lookup Diagnosis Code",
-                   command=lambda: DSMPicker(self, lambda c: self._dx_insert(c))
-                   ).pack(side="left", padx=4)
+        # Bottom / provider area
+        add_entry("tax_id", 38, 1361, 116)
+        add_entry("tax_id_type", 223, 1361, 44, justify="center")
+        add_entry("patient_acct", 381, 1361, 160)
+        add_entry("accept_assign", 605, 1361, 84, justify="center")
+        add_entry("total_charge", 774, 1361, 116, justify="right")
+        add_entry("amount_paid", 928, 1361, 98, justify="right")
+        add_entry("provider_sig", 38, 1421, 250)
+        add_entry("billing_date", 271, 1497, 88, justify="center")
+        add_entry("facility_name", 378, 1421, 268)
+        add_entry("facility_address", 378, 1456, 268)
+        add_entry("facility_npi", 496, 1497, 148, justify="center")
+        add_entry("billing_name", 771, 1421, 270)
+        add_entry("billing_address", 771, 1456, 270)
+        add_entry("billing_phone", 1000, 1361, 130, justify="center")
+        add_entry("billing_npi", 780, 1497, 148, justify="center")
+
+        lookup_btn = ttk.Button(
+            parent,
+            text="Lookup Diagnosis Code",
+            command=lambda: DSMPicker(self, lambda c: self._dx_insert(c)),
+        )
+        lookup_btn.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 6))
 
     def _dx_insert(self, code):
         for key in ["dx1","dx2","dx3","dx4","dx5","dx6","dx7","dx8"]:
