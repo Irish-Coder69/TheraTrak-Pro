@@ -163,7 +163,10 @@ def _draw_form_on_sample_background(c, fd):
         ("patient_sex_f", 688, 285),
         ("ins_name", 760, 283),
         ("patient_address", 40, 337),
-        ("ins_relation", 485, 337),
+        ("ins_relation_self", 486, 337),
+        ("ins_relation_spouse", 533, 337),
+        ("ins_relation_child", 580, 337),
+        ("ins_relation_other", 627, 337),
         ("ins_address2", 760, 337),
         ("patient_city", 40, 390),
         ("patient_state", 392, 390),
@@ -569,6 +572,10 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "patient_zip":    g(patient, "zip"),
         "patient_phone":  patient_phone,
         "ins_relation":   g(patient, "ins_relation", "Self"),
+        "ins_relation_self": "",
+        "ins_relation_spouse": "",
+        "ins_relation_child": "",
+        "ins_relation_other": "",
         "ins_address2":   g(patient, "ins_address"),
         "ins_city2":      g(patient, "ins_city"),
         "ins_state2":     g(patient, "ins_state"),
@@ -610,4 +617,15 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "billing_phone":  g(provider, "phone"),
         "billing_npi":    g(provider, "npi"),
     }
+
+    relation = str(fd.get("ins_relation", "") or "").strip().lower()
+    if relation == "self":
+        fd["ins_relation_self"] = "X"
+    elif relation == "spouse":
+        fd["ins_relation_spouse"] = "X"
+    elif relation == "child":
+        fd["ins_relation_child"] = "X"
+    elif relation == "other":
+        fd["ins_relation_other"] = "X"
+
     return fd

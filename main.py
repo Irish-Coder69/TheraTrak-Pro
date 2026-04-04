@@ -757,7 +757,13 @@ class PatientDialog(tk.Toplevel):
         ttk.Label(f1, text="Emergency Contact").grid(row=7, column=0, sticky="e", padx=4, pady=3)
         ttk.Entry(f1, textvariable=self._fld("emr_name"), width=22).grid(row=7, column=1, sticky="ew", padx=(0,8))
         ttk.Label(f1, text="Relation").grid(row=7, column=2, sticky="e", padx=4)
-        ttk.Entry(f1, textvariable=self._fld("emr_relation"), width=12).grid(row=7, column=3, sticky="w")
+        ttk.Combobox(
+            f1,
+            textvariable=self._fld("emr_relation"),
+            values=["Self", "Spouse", "Child", "Other"],
+            width=12,
+            state="readonly",
+        ).grid(row=7, column=3, sticky="w")
         ttk.Label(f1, text="Phone").grid(row=7, column=4, sticky="e", padx=4)
         ttk.Entry(f1, textvariable=self._fld("emr_phone"), width=16).grid(row=7, column=5, sticky="w")
 
@@ -1927,7 +1933,10 @@ class CMS1500Tab(ttk.Frame):
         add_top_entry("patient_sex_f", 688, 281, 18, justify="center")
         add_top_entry("ins_name", 760, 279, 368)
         add_top_entry("patient_address", 40, 333, 386)
-        add_top_entry("ins_relation", 485, 333, 195)
+        add_top_entry("ins_relation_self", 486, 333, 28, height=mini_height, justify="center")
+        add_top_entry("ins_relation_spouse", 533, 333, 28, height=mini_height, justify="center")
+        add_top_entry("ins_relation_child", 580, 333, 28, height=mini_height, justify="center")
+        add_top_entry("ins_relation_other", 627, 333, 28, height=mini_height, justify="center")
         add_top_entry("ins_address2", 760, 333, 368)
         add_top_entry("patient_city", 40, 386, 335)
         add_top_entry("patient_state", 392, 386, 36, justify="center")
@@ -2279,6 +2288,7 @@ class CMS1500Tab(ttk.Frame):
         pt  = db.get_patient(pid)
         prov = db.get_provider()
         fd = cms_form_data_from_patient(pt, sessions, prov)
+        self._apply_relation_checkboxes(fd)
         for fld, var in self._cv.items():
             if fld in fd:
                 var.set(str(fd[fld]) if fd[fld] is not None else "")
@@ -2290,6 +2300,20 @@ class CMS1500Tab(ttk.Frame):
                 var.set(str(sl.get(key, "")) if sl.get(key) is not None else "")
         self._current_pid = pid
         self._current_sessions = sessions
+
+    def _apply_relation_checkboxes(self, fd):
+        relation = str(fd.get("ins_relation", "") or "").strip().lower()
+        rel_map = {
+            "self": "ins_relation_self",
+            "spouse": "ins_relation_spouse",
+            "child": "ins_relation_child",
+            "other": "ins_relation_other",
+        }
+        for key in rel_map.values():
+            fd.setdefault(key, "")
+        target = rel_map.get(relation)
+        if target and not str(fd.get(target, "")).strip():
+            fd[target] = "X"
 
     def _auto_populate(self):
         # Ask user to pick a patient
@@ -2509,7 +2533,10 @@ class CMS1500Tab(ttk.Frame):
             ("patient_sex_f", 688, 285),
             ("ins_name", 760, 283),
             ("patient_address", 40, 337),
-            ("ins_relation", 485, 337),
+            ("ins_relation_self", 486, 337),
+            ("ins_relation_spouse", 533, 337),
+            ("ins_relation_child", 580, 337),
+            ("ins_relation_other", 627, 337),
             ("ins_address2", 760, 337),
             ("patient_city", 40, 390),
             ("patient_state", 392, 390),
@@ -2658,6 +2685,7 @@ class CMS1500Tab(ttk.Frame):
             fd = json.loads(claim["form_data"])
         except (json.JSONDecodeError, TypeError):
             fd = {}
+        self._apply_relation_checkboxes(fd)
         self._current_pid = claim["patient_id"]
         for key, var in self._cv.items():
             if key in fd:
