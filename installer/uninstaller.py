@@ -12,9 +12,12 @@ from tkinter import Tk, messagebox
 
 APP_NAME = "TheraTrak Pro"
 APP_EXE = "TheraTrak Pro.exe"
+ICON_FILE = "Theratrak-Pro.ico"
 
 
 def install_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
     return Path(os.environ["LOCALAPPDATA"]) / "Programs" / APP_NAME
 
 
@@ -39,12 +42,15 @@ def start_menu_dir() -> Path:
 
 def remove_registry_entry() -> None:
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\TheraTrak Pro"
-    try:
-        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
-    except FileNotFoundError:
-        pass
-    except OSError:
-        pass
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            winreg.DeleteKey(hive, key_path)
+        except FileNotFoundError:
+            pass
+        except PermissionError:
+            pass
+        except OSError:
+            pass
 
 
 def remove_shortcuts() -> None:
@@ -97,6 +103,12 @@ def schedule_self_delete_folder(target: Path) -> None:
 def main() -> int:
     root = Tk()
     root.withdraw()
+    try:
+        icon_path = install_dir() / ICON_FILE
+        if icon_path.exists():
+            root.iconbitmap(default=str(icon_path))
+    except Exception:
+        pass
 
     if not messagebox.askyesno(APP_NAME, "Uninstall TheraTrak Pro from this computer?"):
         root.destroy()
