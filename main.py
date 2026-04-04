@@ -1595,8 +1595,12 @@ class CMS1500Tab(ttk.Frame):
             "line": [1, 2],
             "bot": [1, 2],
         }
-        self._overlay_field_offsets = {}
+        self._overlay_field_offsets = {
+            "ins_type_medicare": [384, 128],
+        }
         self._selected_overlay_field = ""
+        self._drag_state = None
+        self._form_scale = 1.0
         self._build()
 
     def _build(self):
@@ -1679,6 +1683,7 @@ class CMS1500Tab(ttk.Frame):
         btn(align, "→", lambda: self._nudge_overlay(1, 0)).pack(side="left", padx=1)
         btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
         btn(align, "Reset Field", self._reset_overlay_field).pack(side="left", padx=(2, 2))
+        btn(align, "Export Alignment", self._export_alignment_offsets).pack(side="left", padx=(8, 2))
         self._align_status = ttk.Label(align, text="")
         self._align_status.pack(side="left", padx=(10, 0))
         self._align_section.trace_add("write", lambda *a: self._update_align_status())
@@ -1691,6 +1696,7 @@ class CMS1500Tab(ttk.Frame):
         """Build the CMS-1500 form directly on top of the provided sample image."""
         self._cv = {}
         self._sl_vars = []
+        self._field_window_ids = {}
 
         def fld(name, default=""):
             v = tk.StringVar(value=default)
@@ -1716,6 +1722,7 @@ class CMS1500Tab(ttk.Frame):
             )
         else:
             display = original.copy()
+        self._form_scale = max(scale, 0.01)
 
         self._cms_form_pil = display
         self._cms_form_img = ImageTk.PhotoImage(display)
@@ -1754,6 +1761,9 @@ class CMS1500Tab(ttk.Frame):
         def bind_field_selection(widget, field_key):
             widget.bind("<Button-1>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
             widget.bind("<FocusIn>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
+            widget.bind("<ButtonPress-1>", lambda e, k=field_key: self._start_field_drag(e, k), add="+")
+            widget.bind("<B1-Motion>", lambda e, k=field_key: self._drag_field_motion(e, k), add="+")
+            widget.bind("<ButtonRelease-1>", lambda e, k=field_key: self._end_field_drag(e, k), add="+")
 
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
@@ -1772,7 +1782,7 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             bind_field_selection(widget, name)
-            surface.create_window(
+            item_id = surface.create_window(
                 sx(x + x_nudge + field_dx),
                 sy(y + y_nudge + field_dy),
                 window=widget,
@@ -1780,6 +1790,7 @@ class CMS1500Tab(ttk.Frame):
                 width=sx(width),
                 height=height or field_height,
             )
+            self._field_window_ids[name] = item_id
             return widget
 
         def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0, field_key=None):
@@ -1802,7 +1813,7 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             bind_field_selection(widget, field_id)
-            surface.create_window(
+            item_id = surface.create_window(
                 sx(x + x_nudge + field_dx),
                 sy(y + y_nudge + field_dy),
                 window=widget,
@@ -1810,6 +1821,7 @@ class CMS1500Tab(ttk.Frame):
                 width=sx(width),
                 height=max(16, sy(22)),
             )
+            self._field_window_ids[field_id] = item_id
 
         def add_top_entry(name, x, y, width, **kwargs):
             return add_entry(name, x, y, width, x_nudge=top_x_nudge, y_nudge=top_y_nudge, **kwargs)
@@ -2010,6 +2022,47 @@ class CMS1500Tab(ttk.Frame):
         self._selected_overlay_field = field_key
         self._update_align_status()
 
+    def _start_field_drag(self, event, field_key):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode != "field":
+            self._drag_state = None
+            return
+        self._select_overlay_field(field_key)
+        self._drag_state = {
+            "field": field_key,
+            "x_root": event.x_root,
+            "y_root": event.y_root,
+        }
+
+    def _drag_field_motion(self, event, field_key):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode != "field":
+            return
+        if not self._drag_state or self._drag_state.get("field") != field_key:
+            return
+        item_id = self._field_window_ids.get(field_key)
+        if item_id is None or not hasattr(self, "_cms_surface"):
+            return
+
+        dx_px = event.x_root - self._drag_state["x_root"]
+        dy_px = event.y_root - self._drag_state["y_root"]
+        if dx_px == 0 and dy_px == 0:
+            return
+
+        self._cms_surface.move(item_id, dx_px, dy_px)
+        self._drag_state["x_root"] = event.x_root
+        self._drag_state["y_root"] = event.y_root
+
+        off = self._overlay_field_offsets.setdefault(field_key, [0.0, 0.0])
+        off[0] += dx_px / self._form_scale
+        off[1] += dy_px / self._form_scale
+        self._update_align_status()
+
+    def _end_field_drag(self, event, field_key):
+        if self._drag_state and self._drag_state.get("field") == field_key:
+            self._drag_state = None
+            self._rebuild_form_preserve_values()
+
     def _reset_overlay_field(self):
         if not self._selected_overlay_field:
             return
@@ -2030,6 +2083,33 @@ class CMS1500Tab(ttk.Frame):
         self._update_align_status()
         self._rebuild_form_preserve_values()
 
+    def _export_alignment_offsets(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json")],
+            initialfile="cms1500_alignment_offsets.json",
+            title="Export CMS Alignment Offsets",
+        )
+        if not path:
+            return
+
+        payload = {
+            "section_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_offsets.items()
+            },
+            "field_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_field_offsets.items()
+            },
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            messagebox.showinfo("Export Alignment", f"Alignment offsets exported to:\n{path}")
+        except OSError as ex:
+            messagebox.showerror("Export Alignment", f"Could not export alignment offsets:\n{ex}")
+
     def _update_align_status(self):
         if not hasattr(self, "_align_status"):
             return
@@ -2037,7 +2117,7 @@ class CMS1500Tab(ttk.Frame):
         if mode == "field":
             field = self._selected_overlay_field or "none"
             x_off, y_off = self._overlay_field_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
-            self._align_status.config(text=f"field {field}: x={x_off}, y={y_off}")
+            self._align_status.config(text=f"field {field}: x={int(round(x_off))}, y={int(round(y_off))}")
             return
         section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
         if section not in self._overlay_offsets:
