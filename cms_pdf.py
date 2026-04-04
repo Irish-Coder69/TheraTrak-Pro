@@ -3,14 +3,21 @@ TheraTrak Pro – CMS-1500 (02/12) PDF generator using ReportLab.
 Generates an 8.5 × 11 inch letter-size PDF with all CMS-1500 fields.
 """
 from datetime import date
+from pathlib import Path
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
+    from reportlab.lib.utils import ImageReader
     REPORTLAB_OK = True
 except ImportError:
     REPORTLAB_OK = False
+
+try:
+    from app_paths import ASSETS_DIR
+except ImportError:
+    ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
@@ -68,8 +75,158 @@ def build_cms1500_pdf(output_path: str, fd: dict) -> bool:
         return False
 
     c = rl_canvas.Canvas(output_path, pagesize=letter)
-    _draw_form(c, fd)
+    if not _draw_form_on_sample_background(c, fd):
+        _draw_form(c, fd)
     c.save()
+    return True
+
+
+def _draw_form_on_sample_background(c, fd):
+    """Draw values over the bundled CMS sample image background."""
+    sample_image = ASSETS_DIR / "cms1500_sample.png"
+    if not sample_image.exists():
+        return False
+
+    try:
+        bg = ImageReader(str(sample_image))
+    except Exception:
+        return False
+
+    # The on-screen field map uses these pixel coordinates from the sample image.
+    bg_w = 1170.0
+    bg_h = 1515.0
+    sx = W / bg_w
+    sy = H / bg_h
+
+    def px_to_pt_x(x):
+        return x * sx
+
+    def px_to_pt_y(y):
+        # ReportLab origin is bottom-left; field map y is top-origin.
+        return H - (y * sy)
+
+    c.drawImage(bg, 0, 0, width=W, height=H, preserveAspectRatio=False, mask="auto")
+    c.setFillColorRGB(0, 0, 0)
+
+    def draw_field(name, x, y, size=8):
+        val = fd.get(name, "")
+        if val is None:
+            return
+        text = str(val).strip()
+        if not text:
+            return
+        c.setFont(FONT, size)
+        c.drawString(px_to_pt_x(x), px_to_pt_y(y), text)
+
+    field_positions = [
+        ("ins_id", 760, 212),
+        ("patient_name", 44, 283),
+        ("patient_dob", 492, 285),
+        ("patient_sex", 675, 285),
+        ("ins_name", 760, 283),
+        ("patient_address", 40, 337),
+        ("ins_relation", 485, 337),
+        ("ins_address2", 760, 337),
+        ("patient_city", 40, 390),
+        ("patient_state", 392, 390),
+        ("patient_zip", 40, 448),
+        ("patient_phone", 216, 448),
+        ("ins_city2", 760, 390),
+        ("ins_state2", 1088, 390),
+        ("ins_zip2", 760, 448),
+        ("ins_phone", 934, 448),
+        ("other_ins_name", 40, 504),
+        ("other_ins_policy", 40, 560),
+        ("ins_group", 760, 503),
+        ("ins_dob", 816, 559),
+        ("ins_sex", 1036, 559),
+        ("other_claim_id", 760, 617),
+        ("ins_plan", 760, 621),
+        ("other_plan", 40, 676),
+        ("patient_sig", 110, 742),
+        ("patient_sig_date", 502, 742),
+        ("ins_sig", 787, 742),
+        ("illness_date", 38, 823),
+        ("illness_qual", 206, 823),
+        ("other_date", 432, 823),
+        ("other_date_qual", 600, 823),
+        ("unable_from", 816, 823),
+        ("unable_to", 997, 823),
+        ("ref_provider", 38, 880),
+        ("ref_qual", 421, 880),
+        ("ref_npi", 459, 880),
+        ("hospital_from", 817, 880),
+        ("hospital_to", 998, 880),
+        ("add_info", 38, 939),
+        ("outside_lab", 816, 939),
+        ("outside_lab_charge", 972, 939),
+        ("dx1", 95, 977),
+        ("dx2", 286, 977),
+        ("dx3", 477, 977),
+        ("dx4", 669, 977),
+        ("dx5", 95, 1007),
+        ("dx6", 286, 1007),
+        ("dx7", 477, 1007),
+        ("dx8", 669, 1007),
+        ("dx9", 95, 1037),
+        ("dx10", 286, 1037),
+        ("dx11", 477, 1037),
+        ("dx12", 669, 1037),
+        ("resubmission_code", 816, 974),
+        ("original_ref_no", 936, 974),
+        ("auth_number", 760, 994),
+        ("tax_id", 38, 1365),
+        ("tax_id_type", 223, 1365),
+        ("patient_acct", 381, 1365),
+        ("accept_assign", 605, 1365),
+        ("total_charge", 774, 1365),
+        ("amount_paid", 928, 1365),
+        ("provider_sig", 38, 1425),
+        ("provider_sig_date", 294, 1425),
+        ("billing_date", 271, 1501),
+        ("facility_name", 378, 1425),
+        ("facility_address", 378, 1460),
+        ("facility_city_state_zip", 378, 1492),
+        ("facility_qualifier", 472, 1501),
+        ("facility_npi", 496, 1501),
+        ("facility_other_id", 661, 1501),
+        ("billing_name", 771, 1425),
+        ("billing_address", 771, 1460),
+        ("billing_city_state_zip", 771, 1492),
+        ("billing_phone", 1000, 1365),
+        ("billing_qualifier", 756, 1501),
+        ("billing_npi", 780, 1501),
+        ("billing_other_id", 947, 1501),
+    ]
+
+    for name, x, y in field_positions:
+        draw_field(name, x, y)
+
+    line_y = [1048, 1105, 1162, 1219, 1276, 1333]
+    service_lines = fd.get("service_lines", [])
+    for i, y in enumerate(line_y):
+        sl = service_lines[i] if i < len(service_lines) else {}
+        if not sl:
+            continue
+        c.setFont(FONT, 7)
+        for key, x in [
+            ("from_date", 47),
+            ("to_date", 162),
+            ("pos", 285),
+            ("cpt", 369),
+            ("modifier", 468),
+            ("dx_ptr", 648),
+            ("charge", 769),
+            ("units", 872),
+            ("epsdt", 919),
+            ("family_plan", 946),
+            ("id_qual", 979),
+            ("npi", 1000),
+        ]:
+            txt = str(sl.get(key, "") or "").strip()
+            if txt:
+                c.drawString(px_to_pt_x(x), px_to_pt_y(y), txt)
+
     return True
 
 

@@ -1699,6 +1699,7 @@ class CMS1500Tab(ttk.Frame):
         field_font = ("Arial", max(8, int(round(11 * scale))))
         line_font = ("Arial", max(7, int(round(10 * scale))))
         field_height = max(18, sy(24))
+        mini_height = max(14, sy(18))
         entry_border = "#1f2937"
 
         def add_entry(name, x, y, width, *, height=None, justify="left"):
@@ -1753,7 +1754,14 @@ class CMS1500Tab(ttk.Frame):
             )
 
         # Top / patient / insured area
-        add_entry("ins_type", 430, 183, 250)
+        add_entry("ins_type_medicare", 434, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_medicaid", 489, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_tricare", 548, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_champva", 604, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_group", 663, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_feca", 718, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type_other", 771, 183, 28, height=mini_height, justify="center")
+        add_entry("ins_type", 808, 183, 110)
         add_entry("ins_id", 760, 208, 360)
         add_entry("patient_name", 44, 279, 372)
         add_entry("patient_dob", 492, 281, 110, justify="center")
@@ -1772,16 +1780,30 @@ class CMS1500Tab(ttk.Frame):
         add_entry("ins_group", 760, 499, 368)
         add_entry("ins_plan", 760, 617, 368)
         add_entry("ins_phone", 934, 444, 192, justify="center")
+        add_entry("patient_status", 486, 444, 193)
+        add_entry("patient_status_single", 488, 472, 28, height=mini_height, justify="center")
+        add_entry("patient_status_married", 535, 472, 28, height=mini_height, justify="center")
+        add_entry("patient_status_other", 582, 472, 28, height=mini_height, justify="center")
+        add_entry("patient_status_employed", 488, 500, 28, height=mini_height, justify="center")
+        add_entry("patient_status_full_time", 535, 500, 28, height=mini_height, justify="center")
+        add_entry("patient_status_part_time", 582, 500, 28, height=mini_height, justify="center")
         add_entry("other_ins_name", 40, 500, 386)
         add_entry("other_ins_policy", 40, 556, 386)
         add_entry("reserved_nucc_b", 40, 614, 386)
         add_entry("reserved_nucc_c", 40, 672, 386)
+        add_entry("other_ins_dob", 434, 558, 144, justify="center")
+        add_entry("other_ins_sex", 604, 558, 72, justify="center")
+        add_entry("other_ins_employer", 434, 615, 242)
         add_entry("patient_sig", 110, 738, 338)
         add_entry("ins_dob", 816, 555, 178, justify="center")
         add_entry("ins_sex", 1036, 555, 36, justify="center")
         add_entry("other_claim_id", 760, 613, 368)
         add_entry("ins_sig", 787, 738, 300)
         add_entry("other_plan", 40, 672, 386)
+        add_entry("other_plan_yes", 434, 675, 28, height=mini_height, justify="center")
+        add_entry("other_plan_no", 482, 675, 28, height=mini_height, justify="center")
+        add_entry("patient_auth_yes", 433, 739, 26, height=mini_height, justify="center")
+        add_entry("patient_auth_no", 461, 739, 26, height=mini_height, justify="center")
 
         add_entry("patient_sig_date", 502, 738, 120, justify="center")
         # Mid form
@@ -1801,6 +1823,14 @@ class CMS1500Tab(ttk.Frame):
 
         add_entry("outside_lab", 816, 935, 114, justify="center")
         add_entry("outside_lab_charge", 972, 935, 152, justify="right")
+        add_entry("related_emp_yes", 760, 500, 28, height=mini_height, justify="center")
+        add_entry("related_emp_no", 792, 500, 28, height=mini_height, justify="center")
+        add_entry("related_auto_yes", 760, 530, 28, height=mini_height, justify="center")
+        add_entry("related_auto_no", 792, 530, 28, height=mini_height, justify="center")
+        add_entry("related_auto_state", 826, 530, 42, height=mini_height, justify="center")
+        add_entry("related_other_yes", 760, 560, 28, height=mini_height, justify="center")
+        add_entry("related_other_no", 792, 560, 28, height=mini_height, justify="center")
+        add_entry("reserved_local_use", 760, 588, 368)
         # Diagnosis box
         add_entry("dx1", 95, 973, 110)
         add_entry("dx2", 286, 973, 110)
@@ -1810,6 +1840,10 @@ class CMS1500Tab(ttk.Frame):
         add_entry("dx6", 286, 1003, 110)
         add_entry("dx7", 477, 1003, 110)
         add_entry("dx8", 669, 1003, 110)
+        add_entry("dx9", 95, 1033, 110)
+        add_entry("dx10", 286, 1033, 110)
+        add_entry("dx11", 477, 1033, 110)
+        add_entry("dx12", 669, 1033, 110)
 
         add_entry("resubmission_code", 816, 970, 108, justify="center")
         add_entry("original_ref_no", 936, 970, 188)
@@ -1839,16 +1873,19 @@ class CMS1500Tab(ttk.Frame):
         add_entry("total_charge", 774, 1361, 116, justify="right")
         add_entry("amount_paid", 928, 1361, 98, justify="right")
         add_entry("provider_sig", 38, 1421, 250)
+        add_entry("provider_sig_date", 294, 1421, 66, justify="center")
         add_entry("billing_date", 271, 1497, 88, justify="center")
         add_entry("facility_name", 378, 1421, 268)
         add_entry("facility_address", 378, 1456, 268)
         add_entry("facility_city_state_zip", 378, 1488, 268)
+        add_entry("facility_qualifier", 472, 1497, 24, justify="center")
         add_entry("facility_npi", 496, 1497, 148, justify="center")
         add_entry("facility_other_id", 661, 1497, 148, justify="center")
         add_entry("billing_name", 771, 1421, 270)
         add_entry("billing_address", 771, 1456, 270)
         add_entry("billing_city_state_zip", 771, 1488, 270)
         add_entry("billing_phone", 1000, 1361, 130, justify="center")
+        add_entry("billing_qualifier", 756, 1497, 24, justify="center")
         add_entry("billing_npi", 780, 1497, 148, justify="center")
         add_entry("billing_other_id", 947, 1497, 178, justify="center")
 
@@ -1860,11 +1897,11 @@ class CMS1500Tab(ttk.Frame):
         lookup_btn.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 6))
 
     def _dx_insert(self, code):
-        for key in ["dx1","dx2","dx3","dx4","dx5","dx6","dx7","dx8"]:
+        for key in ["dx1","dx2","dx3","dx4","dx5","dx6","dx7","dx8","dx9","dx10","dx11","dx12"]:
             if not self._cv[key].get():
                 self._cv[key].set(code)
                 return
-        self._cv["dx8"].set(code)
+        self._cv["dx12"].set(code)
 
     def load_from_session(self, pid, sessions):
         """Pre-populate form from patient + sessions."""
@@ -2094,6 +2131,10 @@ class CMS1500Tab(ttk.Frame):
             ("dx6", 286, 1007),
             ("dx7", 477, 1007),
             ("dx8", 669, 1007),
+            ("dx9", 95, 1037),
+            ("dx10", 286, 1037),
+            ("dx11", 477, 1037),
+            ("dx12", 669, 1037),
             ("resubmission_code", 816, 974),
             ("original_ref_no", 936, 974),
             ("auth_number", 760, 994),
@@ -2104,16 +2145,19 @@ class CMS1500Tab(ttk.Frame):
             ("total_charge", 774, 1365),
             ("amount_paid", 928, 1365),
             ("provider_sig", 38, 1425),
+            ("provider_sig_date", 294, 1425),
             ("billing_date", 271, 1501),
             ("facility_name", 378, 1425),
             ("facility_address", 378, 1460),
             ("facility_city_state_zip", 378, 1492),
+            ("facility_qualifier", 472, 1501),
             ("facility_npi", 496, 1501),
             ("facility_other_id", 661, 1501),
             ("billing_name", 771, 1425),
             ("billing_address", 771, 1460),
             ("billing_city_state_zip", 771, 1492),
             ("billing_phone", 1000, 1365),
+            ("billing_qualifier", 756, 1501),
             ("billing_npi", 780, 1501),
             ("billing_other_id", 947, 1501),
         ]:
