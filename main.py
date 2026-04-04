@@ -2481,6 +2481,7 @@ class TheraTrakApp(tk.Tk):
 
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="About TheraTrak Pro", command=self._about)
+        help_menu.add_command(label="Check for Updates", command=self._check_for_updates)
         help_menu.add_command(label="Data Migration Help",  command=self._migration_help)
         menubar.add_cascade(label="Help", menu=help_menu)
 
@@ -2537,6 +2538,20 @@ class TheraTrakApp(tk.Tk):
             "  • Reports & CSV data export\n"
             "  • Data migration from Notes 444 files\n\n"
             f"Database: {db.DB_PATH}"
+        )
+
+    def _check_for_updates(self):
+        current_ver = self._version
+        messagebox.showinfo(
+            "Check for Updates",
+            "TheraTrak Pro Update Check\n\n"
+            f"Current Version: {current_ver}\n\n"
+            "To get the latest version:\n\n"
+            "1. Visit the project repository\n"
+            "2. Download the latest installer\n"
+            "3. Run TheraTrak-Pro-Installer.exe\n"
+            "4. The new version will be installed\n\n"
+            "Your database will be preserved during upgrade."
         )
 
     def _migration_help(self):
