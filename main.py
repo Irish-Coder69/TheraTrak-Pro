@@ -1640,6 +1640,7 @@ class CMS1500Tab(ttk.Frame):
         self._form_canvas.configure(yscrollcommand=vscr.set)
         self._form_canvas.pack(side="left", fill="both", expand=True)
         vscr.pack(side="right", fill="y")
+        self._bind_form_mousewheel()
 
         self._form_frame = ttk.Frame(self._form_canvas)
         self._form_frame_id = self._form_canvas.create_window((0, 0), window=self._form_frame, anchor="nw")
@@ -1690,13 +1691,56 @@ class CMS1500Tab(ttk.Frame):
         btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
         btn(align, "Reset Field", self._reset_overlay_field).pack(side="left", padx=(2, 2))
         btn(align, "Export Alignment", self._export_alignment_offsets).pack(side="left", padx=(8, 2))
-        self._align_status = ttk.Label(align, text="")
-        self._align_status.pack(side="left", padx=(10, 0))
+
+        status_row = ttk.Frame(right, padding=(4, 0, 4, 4))
+        status_row.pack(fill="x", before=self._form_canvas)
+        self._align_status = ttk.Label(status_row, text="", anchor="w")
+        self._align_status.pack(side="left", fill="x", expand=True)
         self._align_section.trace_add("write", lambda *a: self._update_align_status())
         self._align_mode.trace_add("write", lambda *a: self._update_align_status())
         self._update_align_status()
 
         self._refresh_claims()
+
+    def _bind_form_mousewheel(self):
+        self._form_canvas.bind("<Enter>", self._activate_form_mousewheel)
+        self._form_canvas.bind("<Leave>", self._deactivate_form_mousewheel)
+
+    def _activate_form_mousewheel(self, event=None):
+        self._form_canvas.bind_all("<MouseWheel>", self._on_form_mousewheel)
+        self._form_canvas.bind_all("<Shift-MouseWheel>", self._on_form_shift_mousewheel)
+        self._form_canvas.bind_all("<Button-4>", self._on_form_wheel_up)
+        self._form_canvas.bind_all("<Button-5>", self._on_form_wheel_down)
+
+    def _deactivate_form_mousewheel(self, event=None):
+        self._form_canvas.unbind_all("<MouseWheel>")
+        self._form_canvas.unbind_all("<Shift-MouseWheel>")
+        self._form_canvas.unbind_all("<Button-4>")
+        self._form_canvas.unbind_all("<Button-5>")
+
+    def _on_form_mousewheel(self, event):
+        delta = event.delta if hasattr(event, "delta") else 0
+        if delta == 0:
+            return "break"
+        units = -1 if delta > 0 else 1
+        self._form_canvas.yview_scroll(units, "units")
+        return "break"
+
+    def _on_form_shift_mousewheel(self, event):
+        delta = event.delta if hasattr(event, "delta") else 0
+        if delta == 0:
+            return "break"
+        units = -1 if delta > 0 else 1
+        self._form_canvas.xview_scroll(units, "units")
+        return "break"
+
+    def _on_form_wheel_up(self, event):
+        self._form_canvas.yview_scroll(-1, "units")
+        return "break"
+
+    def _on_form_wheel_down(self, event):
+        self._form_canvas.yview_scroll(1, "units")
+        return "break"
 
     def _build_form(self, parent):
         """Build the CMS-1500 form directly on top of the provided sample image."""
