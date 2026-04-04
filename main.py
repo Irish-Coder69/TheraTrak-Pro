@@ -2097,6 +2097,19 @@ class SettingsTab(ttk.Frame):
         self._build()
         self._load()
 
+    def _refresh_app_views(self, *, patients=False, sessions=False, billing=False, select_tab=None):
+        app = self.winfo_toplevel()
+        if patients and hasattr(app, "tab_patients"):
+            app.tab_patients.refresh()
+        if sessions and hasattr(app, "tab_sessions"):
+            app.tab_sessions.refresh()
+        if billing and hasattr(app, "tab_billing"):
+            app.tab_billing.refresh()
+        if hasattr(app, "_update_stats"):
+            app._update_stats()
+        if select_tab is not None and hasattr(app, "nb"):
+            app.nb.select(select_tab)
+
     def _fld(self, name, default=""):
         v = tk.StringVar(value=default)
         self._vars[name] = v
@@ -2212,6 +2225,7 @@ class SettingsTab(ttk.Frame):
         self._log(f"Patients imported: {count}")
         for w in warns[:20]:
             self._log(f"  WARN: {w}")
+        self._refresh_app_views(patients=True, select_tab=0)
         messagebox.showinfo("Import Complete", f"Imported {count} patients.\n{len(warns)} warnings.")
 
     def _import_sessions_csv(self):
@@ -2225,6 +2239,7 @@ class SettingsTab(ttk.Frame):
         self._log(f"Sessions imported: {count}")
         for w in warns[:20]:
             self._log(f"  WARN: {w}")
+        self._refresh_app_views(sessions=True)
         messagebox.showinfo("Import Complete", f"Imported {count} sessions.\n{len(warns)} warnings.")
 
     def _import_billing_csv(self):
@@ -2238,6 +2253,7 @@ class SettingsTab(ttk.Frame):
         self._log(f"Billing records imported: {count}")
         for w in warns[:20]:
             self._log(f"  WARN: {w}")
+        self._refresh_app_views(billing=True)
         messagebox.showinfo("Import Complete", f"Imported {count} billing records.\n{len(warns)} warnings.")
 
     def _raw_extract(self):
@@ -2252,6 +2268,7 @@ class SettingsTab(ttk.Frame):
         self._log(f"Raw extraction: {count} records")
         for w in warns[:20]:
             self._log(f"  {w}")
+        self._refresh_app_views(patients=True, select_tab=0)
         messagebox.showinfo("Extraction Complete",
                             f"Extracted {count} records.\nCheck import log for details.")
 
