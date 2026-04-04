@@ -1601,6 +1601,7 @@ class CMS1500Tab(ttk.Frame):
         self._overlay_field_size_offsets = {}
         self._selected_overlay_field = ""
         self._drag_state = None
+        self._resize_drag_state = None
         self._form_scale = 1.0
         self._build()
 
@@ -1747,6 +1748,7 @@ class CMS1500Tab(ttk.Frame):
         self._cv = {}
         self._sl_vars = []
         self._field_window_ids = {}
+        self._field_window_meta = {}
 
         def fld(name, default=""):
             v = tk.StringVar(value=default)
@@ -1814,6 +1816,9 @@ class CMS1500Tab(ttk.Frame):
             widget.bind("<ButtonPress-1>", lambda e, k=field_key: self._start_field_drag(e, k), add="+")
             widget.bind("<B1-Motion>", lambda e, k=field_key: self._drag_field_motion(e, k), add="+")
             widget.bind("<ButtonRelease-1>", lambda e, k=field_key: self._end_field_drag(e, k), add="+")
+            widget.bind("<Shift-ButtonPress-1>", lambda e, k=field_key: self._start_field_resize_drag(e, k), add="+")
+            widget.bind("<Shift-B1-Motion>", lambda e, k=field_key: self._drag_field_resize_motion(e, k), add="+")
+            widget.bind("<Shift-ButtonRelease-1>", lambda e, k=field_key: self._end_field_resize_drag(e, k), add="+")
 
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
@@ -1844,6 +1849,7 @@ class CMS1500Tab(ttk.Frame):
                 height=max(12, base_h + sy(size_dh)),
             )
             self._field_window_ids[name] = item_id
+            self._field_window_meta[name] = {"item_id": item_id, "base_w": base_w, "base_h": base_h}
             return widget
 
         def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0, field_key=None):
@@ -1878,6 +1884,7 @@ class CMS1500Tab(ttk.Frame):
                 height=max(12, base_h + sy(size_dh)),
             )
             self._field_window_ids[field_id] = item_id
+            self._field_window_meta[field_id] = {"item_id": item_id, "base_w": base_w, "base_h": base_h}
 
         def add_top_entry(name, x, y, width, **kwargs):
             return add_entry(name, x, y, width, x_nudge=top_x_nudge, y_nudge=top_y_nudge, **kwargs)
@@ -1916,7 +1923,8 @@ class CMS1500Tab(ttk.Frame):
         add_top_entry("ins_id", 760, 208, 360)
         add_top_entry("patient_name", 44, 279, 372)
         add_top_entry("patient_dob", 492, 281, 110, justify="center")
-        add_top_entry("patient_sex", 675, 281, 40, justify="center")
+        add_top_entry("patient_sex", 665, 281, 18, justify="center")
+        add_top_entry("patient_sex_f", 688, 281, 18, justify="center")
         add_top_entry("ins_name", 760, 279, 368)
         add_top_entry("patient_address", 40, 333, 386)
         add_top_entry("ins_relation", 485, 333, 195)
@@ -1943,11 +1951,13 @@ class CMS1500Tab(ttk.Frame):
         add_top_entry("reserved_nucc_b", 40, 614, 386)
         add_top_entry("reserved_nucc_c", 40, 672, 386)
         add_top_entry("other_ins_dob", 434, 558, 144, justify="center")
-        add_top_entry("other_ins_sex", 604, 558, 72, justify="center")
+        add_top_entry("other_ins_sex", 604, 558, 22, justify="center")
+        add_top_entry("other_ins_sex_f", 632, 558, 22, justify="center")
         add_top_entry("other_ins_employer", 434, 615, 242)
         add_top_entry("patient_sig", 110, 738, 338)
         add_top_entry("ins_dob", 816, 555, 178, justify="center")
-        add_top_entry("ins_sex", 1036, 555, 36, justify="center")
+        add_top_entry("ins_sex", 1032, 555, 16, justify="center")
+        add_top_entry("ins_sex_f", 1054, 555, 16, justify="center")
         add_top_entry("other_claim_id", 760, 613, 368)
         add_top_entry("ins_sig", 787, 738, 300)
         add_top_entry("other_plan", 40, 672, 386)
@@ -2083,6 +2093,10 @@ class CMS1500Tab(ttk.Frame):
         if mode != "field":
             self._drag_state = None
             return
+        if event.state & 0x0001:
+            # Shift-drag is reserved for resize.
+            self._drag_state = None
+            return
         self._select_overlay_field(field_key)
         self._drag_state = {
             "field": field_key,
@@ -2117,6 +2131,50 @@ class CMS1500Tab(ttk.Frame):
     def _end_field_drag(self, event, field_key):
         if self._drag_state and self._drag_state.get("field") == field_key:
             self._drag_state = None
+            self._rebuild_form_preserve_values()
+
+    def _start_field_resize_drag(self, event, field_key):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode != "field":
+            self._resize_drag_state = None
+            return
+        self._select_overlay_field(field_key)
+        self._resize_drag_state = {
+            "field": field_key,
+            "x_root": event.x_root,
+            "y_root": event.y_root,
+        }
+
+    def _drag_field_resize_motion(self, event, field_key):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode != "field":
+            return
+        if not self._resize_drag_state or self._resize_drag_state.get("field") != field_key:
+            return
+        meta = self._field_window_meta.get(field_key)
+        if not meta or not hasattr(self, "_cms_surface"):
+            return
+
+        dx_px = event.x_root - self._resize_drag_state["x_root"]
+        dy_px = event.y_root - self._resize_drag_state["y_root"]
+        if dx_px == 0 and dy_px == 0:
+            return
+
+        size_off = self._overlay_field_size_offsets.setdefault(field_key, [0.0, 0.0])
+        size_off[0] += dx_px / self._form_scale
+        size_off[1] += dy_px / self._form_scale
+
+        new_w = max(12, meta["base_w"] + int(round(size_off[0] * self._form_scale)))
+        new_h = max(12, meta["base_h"] + int(round(size_off[1] * self._form_scale)))
+        self._cms_surface.itemconfigure(meta["item_id"], width=new_w, height=new_h)
+
+        self._resize_drag_state["x_root"] = event.x_root
+        self._resize_drag_state["y_root"] = event.y_root
+        self._update_align_status()
+
+    def _end_field_resize_drag(self, event, field_key):
+        if self._resize_drag_state and self._resize_drag_state.get("field") == field_key:
+            self._resize_drag_state = None
             self._rebuild_form_preserve_values()
 
     def _reset_overlay_field(self):
@@ -2447,7 +2505,8 @@ class CMS1500Tab(ttk.Frame):
             ("ins_id", 760, 212),
             ("patient_name", 44, 283),
             ("patient_dob", 492, 285),
-            ("patient_sex", 675, 285),
+            ("patient_sex", 665, 285),
+            ("patient_sex_f", 688, 285),
             ("ins_name", 760, 283),
             ("patient_address", 40, 337),
             ("ins_relation", 485, 337),
@@ -2462,9 +2521,12 @@ class CMS1500Tab(ttk.Frame):
             ("ins_phone", 934, 448),
             ("other_ins_name", 40, 504),
             ("other_ins_policy", 40, 560),
+            ("other_ins_sex", 604, 559),
+            ("other_ins_sex_f", 632, 559),
             ("ins_group", 760, 503),
             ("ins_dob", 816, 559),
-            ("ins_sex", 1036, 559),
+            ("ins_sex", 1032, 559),
+            ("ins_sex_f", 1054, 559),
             ("other_claim_id", 760, 617),
             ("ins_plan", 760, 621),
             ("other_plan", 40, 676),
