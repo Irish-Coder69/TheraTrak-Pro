@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import traceback
 import tkinter as tk
 import tkinter.font as tkFont
 import urllib.request
@@ -22,7 +23,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import database as db
 import version_manager as vm
-from app_paths import ICON_FILE
+from app_paths import APP_ROOT, DB_FILE, ICON_FILE, VERSION_FILE
 
 # ─── Colour / Style constants ──────────────────────────────────────────────────
 
@@ -59,9 +60,50 @@ STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
 GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/Irish-Coder69/TheraTrak-Pro/releases/latest"
 GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/latest"
 UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
+STARTUP_LOG_FILE = APP_ROOT / "startup.log"
 
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
+
+def _append_startup_log(message: str):
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except OSError:
+        pass
+
+
+def _startup_self_check():
+    _append_startup_log("=== Application startup ===")
+    _append_startup_log(f"Executable: {sys.executable}")
+    _append_startup_log(f"Python: {sys.version.split()[0]}")
+    _append_startup_log(f"App root: {APP_ROOT}")
+    _append_startup_log(f"CWD: {Path.cwd()}")
+
+    checks = [
+        ("ICON_FILE", ICON_FILE),
+        ("VERSION_FILE", VERSION_FILE),
+        ("DB_FILE", DB_FILE),
+    ]
+    for name, path in checks:
+        _append_startup_log(f"{name}: {'OK' if path.exists() else 'MISSING'} ({path})")
+
+
+def _install_crash_logger():
+    def _handle_uncaught(exc_type, exc_value, exc_tb):
+        _append_startup_log("Uncaught exception:")
+        _append_startup_log("".join(traceback.format_exception(exc_type, exc_value, exc_tb)).rstrip())
+        try:
+            messagebox.showerror(
+                "TheraTrak Pro Error",
+                "An unexpected error occurred.\n\n"
+                f"Details were written to:\n{STARTUP_LOG_FILE}"
+            )
+        except Exception:
+            pass
+
+    sys.excepthook = _handle_uncaught
 
 def ttk_style():
     style = ttk.Style()
@@ -2810,25 +2852,32 @@ class TheraTrakApp(tk.Tk):
 # ─── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    db.initialize_db()
-    app = TheraTrakApp()
-    app.withdraw()
+    _install_crash_logger()
+    _startup_self_check()
+    try:
+        db.initialize_db()
+        app = TheraTrakApp()
+        app.withdraw()
 
-    login = LoginDialog(app)
-    app.wait_window(login)
+        login = LoginDialog(app)
+        app.wait_window(login)
 
-    if login.user:
-        app.set_logged_in_user(login.user)
-        if login.winfo_exists():
-            login.destroy()
-        app.deiconify()
-        app.update_idletasks()
-        try:
-            app.state("zoomed")
-        except tk.TclError:
-            screen_w = app.winfo_screenwidth()
-            screen_h = app.winfo_screenheight()
-            app.geometry(f"{screen_w}x{screen_h}+0+0")
-        app.mainloop()
-    else:
-        app.destroy()
+        if login.user:
+            app.set_logged_in_user(login.user)
+            if login.winfo_exists():
+                login.destroy()
+            app.deiconify()
+            app.update_idletasks()
+            try:
+                app.state("zoomed")
+            except tk.TclError:
+                screen_w = app.winfo_screenwidth()
+                screen_h = app.winfo_screenheight()
+                app.geometry(f"{screen_w}x{screen_h}+0+0")
+            app.mainloop()
+        else:
+            app.destroy()
+    except Exception:
+        _append_startup_log("Fatal startup failure:")
+        _append_startup_log(traceback.format_exc().rstrip())
+        raise

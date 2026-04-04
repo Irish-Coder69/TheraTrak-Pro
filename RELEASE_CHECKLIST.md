@@ -1,0 +1,29 @@
+# TheraTrak Pro Release Checklist
+
+## Pre-Release
+- Confirm `version.json` is updated (major/minor/patch/build).
+- Ensure Help menu update flow points to GitHub `releases/latest`.
+- Verify no local debug changes are left in source.
+- Use Python 3.11/3.12 build environment (`.venv311` preferred).
+
+## Build
+- Run `./build_installer.ps1` from repo root.
+- Confirm output line: `Installer created at: L:\TheraTrak Pro\release\TheraTrak-Pro-Installer.exe`.
+- Smoke test installer on local machine (install + launch).
+- Smoke test app startup and Help > Check for Updates.
+
+## Commit and Push
+- Commit source/version changes.
+- Commit rebuilt installer artifact.
+- Push to `main`.
+
+## Publish GitHub Release
+- Create tag: `v<major>.<minor>.<patch>-build<build>`.
+- Upload `release/TheraTrak-Pro-Installer.exe` as release asset.
+- Ensure release is marked `Latest` (not draft/prerelease).
+
+## Post-Release Validation
+- Run updater check from one older installed build.
+- Confirm download + install completes and app relaunches.
+- Confirm user data persists (`theratrak.db` remains intact).
+- Verify startup log exists at app root (`startup.log`) for diagnostics.
