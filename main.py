@@ -2480,7 +2480,6 @@ class TheraTrakApp(tk.Tk):
         menubar.add_cascade(label="Navigate", menu=nav_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="Version Manager", command=self._open_version_manager)
         help_menu.add_command(label="About TheraTrak Pro", command=self._about)
         help_menu.add_command(label="Data Migration Help",  command=self._migration_help)
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -2503,9 +2502,6 @@ class TheraTrakApp(tk.Tk):
     def set_logged_in_user(self, user):
         self.current_user = user
         self._update_stats()
-
-    def _open_version_manager(self):
-        VersionManagerDialog(self, on_change=lambda _: self._update_stats())
 
     def _open_user_directory(self):
         UserDirectoryDialog(self)
