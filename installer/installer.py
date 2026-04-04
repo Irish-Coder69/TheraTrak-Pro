@@ -15,6 +15,7 @@ from tkinter import Tk, messagebox
 APP_NAME = "TheraTrak Pro"
 APP_EXE = "TheraTrak Pro.exe"
 UNINSTALL_EXE = "TheraTrak Pro Uninstaller.exe"
+APP_BUNDLE_DIR = "app"
 UNINSTALL_CMD = "Uninstall TheraTrak Pro.cmd"
 ICON_FILE = "Theratrak-Pro.ico"
 VERSION_FILE = "version.json"
@@ -204,7 +205,18 @@ def main() -> int:
     target = install_dir()
     target.mkdir(parents=True, exist_ok=True)
 
-    for name in (APP_EXE, UNINSTALL_EXE, ICON_FILE, VERSION_FILE):
+    app_bundle = source / APP_BUNDLE_DIR
+    if app_bundle.exists() and app_bundle.is_dir():
+        for item in app_bundle.iterdir():
+            destination = target / item.name
+            if item.is_dir():
+                if destination.exists():
+                    shutil.rmtree(destination, ignore_errors=True)
+                shutil.copytree(item, destination)
+            else:
+                shutil.copy2(item, destination)
+
+    for name in (UNINSTALL_EXE, ICON_FILE, VERSION_FILE):
         src = source / name
         if src.exists():
             shutil.copy2(src, target / name)
