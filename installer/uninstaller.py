@@ -6,8 +6,6 @@ import subprocess
 import sys
 import tempfile
 import winreg
-import ctypes
-from uuid import UUID
 from pathlib import Path
 from tkinter import Tk, messagebox
 
@@ -20,41 +18,19 @@ def install_dir() -> Path:
     return Path(os.environ["LOCALAPPDATA"]) / "Programs" / APP_NAME
 
 
-def desktop_dir() -> Path:
-    folder_id = UUID("B4BFCC3A-DB2C-424C-B029-7FE99A87C641")
-    guid_bytes = folder_id.bytes_le
-
-    class GUID(ctypes.Structure):
-        _fields_ = [
-            ("Data1", ctypes.c_uint32),
-            ("Data2", ctypes.c_uint16),
-            ("Data3", ctypes.c_uint16),
-            ("Data4", ctypes.c_ubyte * 8),
-        ]
-
-    guid = GUID(
-        int.from_bytes(guid_bytes[0:4], "little"),
-        int.from_bytes(guid_bytes[4:6], "little"),
-        int.from_bytes(guid_bytes[6:8], "little"),
-        (ctypes.c_ubyte * 8).from_buffer_copy(guid_bytes[8:16]),
-    )
-
-    path_ptr = ctypes.c_wchar_p()
-    hr = ctypes.windll.shell32.SHGetKnownFolderPath(
-        ctypes.byref(guid),
-        0,
-        None,
-        ctypes.byref(path_ptr),
-    )
-    if hr == 0 and path_ptr.value:
-        desktop = Path(path_ptr.value)
-        ctypes.windll.ole32.CoTaskMemFree(path_ptr)
-        return desktop
-    return Path.home() / "Desktop"
-
-
-def desktop_shortcut() -> Path:
-    return desktop_dir() / f"{APP_NAME}.lnk"
+def desktop_shortcut_candidates() -> list[Path]:
+    candidates = [Path.home() / "Desktop"]
+    one_drive = os.environ.get("OneDrive")
+    if one_drive:
+        candidates.append(Path(one_drive) / "Desktop")
+    seen = set()
+    unique = []
+    for p in candidates:
+        key = str(p).lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(p / f"{APP_NAME}.lnk")
+    return unique
 
 
 def start_menu_dir() -> Path:
@@ -72,10 +48,11 @@ def remove_registry_entry() -> None:
 
 
 def remove_shortcuts() -> None:
-    try:
-        desktop_shortcut().unlink(missing_ok=True)
-    except OSError:
-        pass
+    for shortcut in desktop_shortcut_candidates():
+        try:
+            shortcut.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     try:
         shutil.rmtree(start_menu_dir(), ignore_errors=True)
@@ -98,13 +75,20 @@ def schedule_self_delete_folder(target: Path) -> None:
     script_path = Path(tempfile.gettempdir()) / "theratrak_uninstall_cleanup.cmd"
     script = (
         "@echo off\n"
-        "ping 127.0.0.1 -n 4 > nul\n"
-        f"rmdir /s /q \"{target}\"\n"
+        "cd /d %TEMP%\n"
+        "set TARGET=%~1\n"
+        "for /L %%i in (1,1,15) do (\n"
+        "  rmdir /s /q \"%TARGET%\" >nul 2>&1\n"
+        "  if not exist \"%TARGET%\" goto done\n"
+        "  ping 127.0.0.1 -n 2 > nul\n"
+        ")\n"
+        ":done\n"
         "del /f /q \"%~f0\"\n"
     )
     script_path.write_text(script, encoding="utf-8")
     subprocess.Popen(
-        ["cmd.exe", "/c", str(script_path)],
+        ["cmd.exe", "/c", str(script_path), str(target)],
+        cwd=tempfile.gettempdir(),
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         close_fds=True,
     )
