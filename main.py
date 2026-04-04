@@ -1637,6 +1637,40 @@ class CMS1500Tab(ttk.Frame):
 
         self._refresh_claims()
 
+    def _add_form_preview(self, parent):
+        sample_image = APP_ROOT / "assets" / "cms1500_sample.png"
+        if not sample_image.exists():
+            return 0
+
+        try:
+            raw_img = tk.PhotoImage(file=str(sample_image))
+        except tk.TclError:
+            return 0
+
+        max_width = 980
+        scale = max(1, (raw_img.width() + max_width - 1) // max_width)
+        display_img = raw_img.subsample(scale, scale) if scale > 1 else raw_img
+
+        # Keep references alive so Tk does not garbage-collect the image.
+        self._cms_preview_raw = raw_img
+        self._cms_preview_img = display_img
+
+        ttk.Label(
+            parent,
+            text="CMS-1500 Sample Layout",
+            font=FONT_LG,
+            foreground=HDR_BG,
+        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 4))
+
+        tk.Label(
+            parent,
+            image=self._cms_preview_img,
+            bg="white",
+            relief="solid",
+            borderwidth=1,
+        ).grid(row=1, column=0, columnspan=4, sticky="w", padx=4, pady=(0, 10))
+        return 2
+
     def _build_form(self, parent):
         """Build all CMS-1500 form fields."""
         self._cv = {}  # field_name -> StringVar
@@ -1718,7 +1752,7 @@ class CMS1500Tab(ttk.Frame):
         # Service lines section
         self._sl_vars = []  # list of dicts per service line
 
-        row_offset = 0
+        row_offset = self._add_form_preview(parent)
         for sec_title, fields in sections:
             lbl_sec = ttk.Label(parent, text=sec_title, font=FONT_LG,
                                 background=HDR_BG, foreground="white")
