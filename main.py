@@ -1598,6 +1598,7 @@ class CMS1500Tab(ttk.Frame):
         self._overlay_field_offsets = {
             "ins_type_medicare": [384, 128],
         }
+        self._overlay_field_size_offsets = {}
         self._selected_overlay_field = ""
         self._drag_state = None
         self._form_scale = 1.0
@@ -1681,6 +1682,11 @@ class CMS1500Tab(ttk.Frame):
         btn(align, "↑", lambda: self._nudge_overlay(0, -1)).pack(side="left", padx=1)
         btn(align, "↓", lambda: self._nudge_overlay(0, 1)).pack(side="left", padx=1)
         btn(align, "→", lambda: self._nudge_overlay(1, 0)).pack(side="left", padx=1)
+        ttk.Label(align, text="Size:").pack(side="left", padx=(10, 4))
+        btn(align, "W-", lambda: self._resize_overlay_field(-2, 0)).pack(side="left", padx=1)
+        btn(align, "W+", lambda: self._resize_overlay_field(2, 0)).pack(side="left", padx=1)
+        btn(align, "H-", lambda: self._resize_overlay_field(0, -2)).pack(side="left", padx=1)
+        btn(align, "H+", lambda: self._resize_overlay_field(0, 2)).pack(side="left", padx=1)
         btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
         btn(align, "Reset Field", self._reset_overlay_field).pack(side="left", padx=(2, 2))
         btn(align, "Export Alignment", self._export_alignment_offsets).pack(side="left", padx=(8, 2))
@@ -1767,6 +1773,7 @@ class CMS1500Tab(ttk.Frame):
 
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
+            size_dw, size_dh = self._overlay_field_size_offsets.get(name, [0, 0])
             widget = tk.Entry(
                 surface,
                 textvariable=fld(name),
@@ -1782,13 +1789,15 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             bind_field_selection(widget, name)
+            base_w = sx(width)
+            base_h = height or field_height
             item_id = surface.create_window(
                 sx(x + x_nudge + field_dx),
                 sy(y + y_nudge + field_dy),
                 window=widget,
                 anchor="nw",
-                width=sx(width),
-                height=height or field_height,
+                width=max(12, base_w + sx(size_dw)),
+                height=max(12, base_h + sy(size_dh)),
             )
             self._field_window_ids[name] = item_id
             return widget
@@ -1798,6 +1807,7 @@ class CMS1500Tab(ttk.Frame):
             var_map[name] = var
             field_id = field_key or name
             field_dx, field_dy = self._overlay_field_offsets.get(field_id, [0, 0])
+            size_dw, size_dh = self._overlay_field_size_offsets.get(field_id, [0, 0])
             widget = tk.Entry(
                 surface,
                 textvariable=var,
@@ -1813,13 +1823,15 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             bind_field_selection(widget, field_id)
+            base_w = sx(width)
+            base_h = max(16, sy(22))
             item_id = surface.create_window(
                 sx(x + x_nudge + field_dx),
                 sy(y + y_nudge + field_dy),
                 window=widget,
                 anchor="nw",
-                width=sx(width),
-                height=max(16, sy(22)),
+                width=max(12, base_w + sx(size_dw)),
+                height=max(12, base_h + sy(size_dh)),
             )
             self._field_window_ids[field_id] = item_id
 
@@ -2067,6 +2079,17 @@ class CMS1500Tab(ttk.Frame):
         if not self._selected_overlay_field:
             return
         self._overlay_field_offsets[self._selected_overlay_field] = [0, 0]
+        self._overlay_field_size_offsets[self._selected_overlay_field] = [0, 0]
+        self._update_align_status()
+        self._rebuild_form_preserve_values()
+
+    def _resize_overlay_field(self, dw, dh):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode != "field" or not self._selected_overlay_field:
+            return
+        size_offset = self._overlay_field_size_offsets.setdefault(self._selected_overlay_field, [0, 0])
+        size_offset[0] += dw
+        size_offset[1] += dh
         self._update_align_status()
         self._rebuild_form_preserve_values()
 
@@ -2102,6 +2125,10 @@ class CMS1500Tab(ttk.Frame):
                 key: [int(round(vals[0])), int(round(vals[1]))]
                 for key, vals in self._overlay_field_offsets.items()
             },
+            "field_size_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_field_size_offsets.items()
+            },
         }
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -2117,7 +2144,10 @@ class CMS1500Tab(ttk.Frame):
         if mode == "field":
             field = self._selected_overlay_field or "none"
             x_off, y_off = self._overlay_field_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
-            self._align_status.config(text=f"field {field}: x={int(round(x_off))}, y={int(round(y_off))}")
+            w_off, h_off = self._overlay_field_size_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
+            self._align_status.config(
+                text=f"field {field}: x={int(round(x_off))}, y={int(round(y_off))}, w={int(round(w_off))}, h={int(round(h_off))}"
+            )
             return
         section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
         if section not in self._overlay_offsets:
@@ -2216,6 +2246,10 @@ class CMS1500Tab(ttk.Frame):
             "field_offsets": {
                 key: [int(round(vals[0])), int(round(vals[1]))]
                 for key, vals in self._overlay_field_offsets.items()
+            },
+            "field_size_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_field_size_offsets.items()
             },
         }
         return fd
