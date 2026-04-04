@@ -1595,6 +1595,8 @@ class CMS1500Tab(ttk.Frame):
             "line": [1, 2],
             "bot": [1, 2],
         }
+        self._overlay_field_offsets = {}
+        self._selected_overlay_field = ""
         self._build()
 
     def _build(self):
@@ -1652,6 +1654,15 @@ class CMS1500Tab(ttk.Frame):
         # Live alignment controls for interactive box placement.
         align = ttk.Frame(right, padding=(4, 0, 4, 4))
         align.pack(fill="x", before=self._form_canvas)
+        ttk.Label(align, text="Mode:").pack(side="left", padx=(0, 4))
+        self._align_mode = tk.StringVar(value="section")
+        ttk.Combobox(
+            align,
+            textvariable=self._align_mode,
+            values=["section", "field"],
+            state="readonly",
+            width=8,
+        ).pack(side="left", padx=(0, 8))
         ttk.Label(align, text="Align Section:").pack(side="left", padx=(0, 4))
         self._align_section = tk.StringVar(value="top")
         ttk.Combobox(
@@ -1667,9 +1678,11 @@ class CMS1500Tab(ttk.Frame):
         btn(align, "↓", lambda: self._nudge_overlay(0, 1)).pack(side="left", padx=1)
         btn(align, "→", lambda: self._nudge_overlay(1, 0)).pack(side="left", padx=1)
         btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
+        btn(align, "Reset Field", self._reset_overlay_field).pack(side="left", padx=(2, 2))
         self._align_status = ttk.Label(align, text="")
         self._align_status.pack(side="left", padx=(10, 0))
         self._align_section.trace_add("write", lambda *a: self._update_align_status())
+        self._align_mode.trace_add("write", lambda *a: self._update_align_status())
         self._update_align_status()
 
         self._refresh_claims()
@@ -1738,7 +1751,12 @@ class CMS1500Tab(ttk.Frame):
         line_x_nudge, line_y_nudge = self._overlay_offsets.get("line", [1, 2])
         bot_x_nudge, bot_y_nudge = self._overlay_offsets.get("bot", [1, 2])
 
+        def bind_field_selection(widget, field_key):
+            widget.bind("<Button-1>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
+            widget.bind("<FocusIn>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
+
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
+            field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
             widget = tk.Entry(
                 surface,
                 textvariable=fld(name),
@@ -1753,9 +1771,10 @@ class CMS1500Tab(ttk.Frame):
                 insertbackground="black",
                 justify=justify,
             )
+            bind_field_selection(widget, name)
             surface.create_window(
-                sx(x + x_nudge),
-                sy(y + y_nudge),
+                sx(x + x_nudge + field_dx),
+                sy(y + y_nudge + field_dy),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
@@ -1763,9 +1782,11 @@ class CMS1500Tab(ttk.Frame):
             )
             return widget
 
-        def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0):
+        def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0, field_key=None):
             var = tk.StringVar()
             var_map[name] = var
+            field_id = field_key or name
+            field_dx, field_dy = self._overlay_field_offsets.get(field_id, [0, 0])
             widget = tk.Entry(
                 surface,
                 textvariable=var,
@@ -1780,9 +1801,10 @@ class CMS1500Tab(ttk.Frame):
                 insertbackground="black",
                 justify=justify,
             )
+            bind_field_selection(widget, field_id)
             surface.create_window(
-                sx(x + x_nudge),
-                sy(y + y_nudge),
+                sx(x + x_nudge + field_dx),
+                sy(y + y_nudge + field_dy),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
@@ -1801,8 +1823,18 @@ class CMS1500Tab(ttk.Frame):
         def add_bottom_entry(name, x, y, width, **kwargs):
             return add_entry(name, x, y, width, x_nudge=bot_x_nudge, y_nudge=bot_y_nudge, **kwargs)
 
-        def add_line_entry(var_map, name, x, y, width, **kwargs):
-            return add_service_entry(var_map, name, x, y, width, x_nudge=line_x_nudge, y_nudge=line_y_nudge, **kwargs)
+        def add_line_entry(var_map, name, x, y, width, field_key, **kwargs):
+            return add_service_entry(
+                var_map,
+                name,
+                x,
+                y,
+                width,
+                x_nudge=line_x_nudge,
+                y_nudge=line_y_nudge,
+                field_key=field_key,
+                **kwargs,
+            )
 
         # Top / patient / insured area
         add_top_entry("ins_type_medicare", 434, 183, 28, height=mini_height, justify="center")
@@ -1900,20 +1932,20 @@ class CMS1500Tab(ttk.Frame):
         add_dx_entry("original_ref_no", 936, 970, 188)
         # Service lines
         line_y = [1046, 1103, 1160, 1217, 1274, 1331]
-        for y in line_y:
+        for line_idx, y in enumerate(line_y, start=1):
             sl_row = {}
-            add_line_entry(sl_row, "from_date", 47, y, 108)
-            add_line_entry(sl_row, "to_date", 162, y, 108)
-            add_line_entry(sl_row, "pos", 285, y, 40, justify="center")
-            add_line_entry(sl_row, "cpt", 369, y, 96, justify="center")
-            add_line_entry(sl_row, "modifier", 468, y, 110, justify="center")
-            add_line_entry(sl_row, "dx_ptr", 648, y, 60, justify="center")
-            add_line_entry(sl_row, "charge", 769, y, 84, justify="right")
-            add_line_entry(sl_row, "units", 872, y, 42, justify="center")
-            add_line_entry(sl_row, "epsdt", 919, y, 24, justify="center")
-            add_line_entry(sl_row, "family_plan", 946, y, 30, justify="center")
-            add_line_entry(sl_row, "id_qual", 979, y, 34, justify="center")
-            add_line_entry(sl_row, "npi", 1000, y, 124, justify="center")
+            add_line_entry(sl_row, "from_date", 47, y, 108, f"sl{line_idx}_from_date")
+            add_line_entry(sl_row, "to_date", 162, y, 108, f"sl{line_idx}_to_date")
+            add_line_entry(sl_row, "pos", 285, y, 40, f"sl{line_idx}_pos", justify="center")
+            add_line_entry(sl_row, "cpt", 369, y, 96, f"sl{line_idx}_cpt", justify="center")
+            add_line_entry(sl_row, "modifier", 468, y, 110, f"sl{line_idx}_modifier", justify="center")
+            add_line_entry(sl_row, "dx_ptr", 648, y, 60, f"sl{line_idx}_dx_ptr", justify="center")
+            add_line_entry(sl_row, "charge", 769, y, 84, f"sl{line_idx}_charge", justify="right")
+            add_line_entry(sl_row, "units", 872, y, 42, f"sl{line_idx}_units", justify="center")
+            add_line_entry(sl_row, "epsdt", 919, y, 24, f"sl{line_idx}_epsdt", justify="center")
+            add_line_entry(sl_row, "family_plan", 946, y, 30, f"sl{line_idx}_family_plan", justify="center")
+            add_line_entry(sl_row, "id_qual", 979, y, 34, f"sl{line_idx}_id_qual", justify="center")
+            add_line_entry(sl_row, "npi", 1000, y, 124, f"sl{line_idx}_npi", justify="center")
             self._sl_vars.append(sl_row)
 
         # Bottom / provider area
@@ -1955,11 +1987,33 @@ class CMS1500Tab(ttk.Frame):
         self._cv["dx12"].set(code)
 
     def _nudge_overlay(self, dx, dy):
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode == "field":
+            if not self._selected_overlay_field:
+                return
+            field_offset = self._overlay_field_offsets.setdefault(self._selected_overlay_field, [0, 0])
+            field_offset[0] += dx
+            field_offset[1] += dy
+            self._update_align_status()
+            self._rebuild_form_preserve_values()
+            return
+
         section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
         if section not in self._overlay_offsets:
             section = "top"
         self._overlay_offsets[section][0] += dx
         self._overlay_offsets[section][1] += dy
+        self._update_align_status()
+        self._rebuild_form_preserve_values()
+
+    def _select_overlay_field(self, field_key):
+        self._selected_overlay_field = field_key
+        self._update_align_status()
+
+    def _reset_overlay_field(self):
+        if not self._selected_overlay_field:
+            return
+        self._overlay_field_offsets[self._selected_overlay_field] = [0, 0]
         self._update_align_status()
         self._rebuild_form_preserve_values()
 
@@ -1978,6 +2032,12 @@ class CMS1500Tab(ttk.Frame):
 
     def _update_align_status(self):
         if not hasattr(self, "_align_status"):
+            return
+        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
+        if mode == "field":
+            field = self._selected_overlay_field or "none"
+            x_off, y_off = self._overlay_field_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
+            self._align_status.config(text=f"field {field}: x={x_off}, y={y_off}")
             return
         section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
         if section not in self._overlay_offsets:
