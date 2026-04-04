@@ -2491,7 +2491,6 @@ class TheraTrakApp(tk.Tk):
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="About TheraTrak Pro", command=self._about)
         help_menu.add_command(label="Check for Updates", command=self._check_for_updates)
-        help_menu.add_command(label="Data Migration Help",  command=self._migration_help)
         menubar.add_cascade(label="Help", menu=help_menu)
 
         self.config(menu=menubar)
