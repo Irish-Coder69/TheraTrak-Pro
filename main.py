@@ -8,9 +8,12 @@ Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 
 import json
 import os
+import re
 import sys
 import tkinter as tk
 import tkinter.font as tkFont
+import urllib.request
+import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -50,6 +53,9 @@ STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
           "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
           "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
           "VA","WA","WV","WI","WY","DC"]
+
+GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/Irish-Coder69/TheraTrak-Pro/releases/latest"
+GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/latest"
 
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
@@ -2540,18 +2546,69 @@ class TheraTrakApp(tk.Tk):
             f"Database: {db.DB_PATH}"
         )
 
+    def _parse_version_tuple(self, text):
+        nums = [int(n) for n in re.findall(r"\d+", text or "")]
+        if not nums:
+            return (0, 0, 0, 0)
+        while len(nums) < 4:
+            nums.append(0)
+        return tuple(nums[:4])
+
     def _check_for_updates(self):
         current_ver = self._version
+        current_tuple = self._parse_version_tuple(current_ver)
+
+        req = urllib.request.Request(
+            GITHUB_LATEST_RELEASE_API,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "TheraTrak-Pro"
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        except Exception:
+            messagebox.showwarning(
+                "Check for Updates",
+                "Could not contact the update server right now.\n\n"
+                f"Current Version: {current_ver}\n\n"
+                "You can still download the latest installer from:\n"
+                f"{GITHUB_RELEASES_PAGE}"
+            )
+            return
+
+        latest_tag = payload.get("tag_name") or payload.get("name") or ""
+        latest_tuple = self._parse_version_tuple(latest_tag)
+        release_url = payload.get("html_url") or GITHUB_RELEASES_PAGE
+
+        if latest_tuple > current_tuple:
+            open_page = messagebox.askyesno(
+                "Update Available",
+                "A newer version of TheraTrak Pro is available.\n\n"
+                f"Current Version: {current_ver}\n"
+                f"Latest Version: {latest_tag or 'Unknown'}\n\n"
+                "Open the download page now?"
+            )
+            if open_page:
+                webbrowser.open(release_url)
+            return
+
+        if latest_tuple == current_tuple:
+            messagebox.showinfo(
+                "Check for Updates",
+                "TheraTrak Pro is up to date.\n\n"
+                f"Current Version: {current_ver}\n"
+                f"Latest Version: {latest_tag or 'Unknown'}"
+            )
+            return
+
         messagebox.showinfo(
             "Check for Updates",
-            "TheraTrak Pro Update Check\n\n"
-            f"Current Version: {current_ver}\n\n"
-            "To get the latest version:\n\n"
-            "1. Visit the project repository\n"
-            "2. Download the latest installer\n"
-            "3. Run TheraTrak-Pro-Installer.exe\n"
-            "4. The new version will be installed\n\n"
-            "Your database will be preserved during upgrade."
+            "You are running a newer build than the latest public release.\n\n"
+            f"Current Version: {current_ver}\n"
+            f"Latest Release: {latest_tag or 'Unknown'}"
         )
 
     def _migration_help(self):
