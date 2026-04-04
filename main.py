@@ -2598,6 +2598,14 @@ class TheraTrakApp(tk.Tk):
             nums.append(0)
         return tuple(nums[:4])
 
+    def _format_tag_version(self, tag: str) -> str:
+        """Convert a raw GitHub tag like 'v1.0.4-build5' to '1.0.4 Build 5'."""
+        nums = [int(n) for n in re.findall(r"\d+", tag or "")]
+        while len(nums) < 4:
+            nums.append(0)
+        major, minor, patch, build = nums[:4]
+        return f"{major}.{minor}.{patch} Build {build}"
+
     def _pick_installer_asset(self, payload):
         assets = payload.get("assets") or []
         for asset in assets:
@@ -2752,6 +2760,7 @@ class TheraTrakApp(tk.Tk):
 
         latest_tag = payload.get("tag_name") or payload.get("name") or ""
         latest_tuple = self._parse_version_tuple(latest_tag)
+        latest_display = self._format_tag_version(latest_tag) if latest_tag else "Unknown"
         release_url = payload.get("html_url") or GITHUB_RELEASES_PAGE
         installer_asset = self._pick_installer_asset(payload)
 
@@ -2760,7 +2769,7 @@ class TheraTrakApp(tk.Tk):
                 "Update Available",
                 "A newer version of TheraTrak Pro is available.\n\n"
                 f"Current Version: {current_ver}\n"
-                f"Latest Version: {latest_tag or 'Unknown'}\n\n"
+                f"Latest Version: {latest_display}\n\n"
                 "Download and install it now?"
             )
             if not do_update:
@@ -2826,7 +2835,7 @@ class TheraTrakApp(tk.Tk):
                 "Check for Updates",
                 "TheraTrak Pro is up to date.\n\n"
                 f"Current Version: {current_ver}\n"
-                f"Latest Version: {latest_tag or 'Unknown'}"
+                f"Latest Version: {latest_display}"
             )
             return
 
@@ -2834,7 +2843,7 @@ class TheraTrakApp(tk.Tk):
             "Check for Updates",
             "You are running a newer build than the latest public release.\n\n"
             f"Current Version: {current_ver}\n"
-            f"Latest Release: {latest_tag or 'Unknown'}"
+            f"Latest Release: {latest_display}"
         )
 
     def _migration_help(self):
