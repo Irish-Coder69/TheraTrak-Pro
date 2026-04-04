@@ -15,8 +15,11 @@ from tkinter import Tk, messagebox
 APP_NAME = "TheraTrak Pro"
 APP_EXE = "TheraTrak Pro.exe"
 UNINSTALL_EXE = "TheraTrak Pro Uninstaller.exe"
+UNINSTALL_CMD = "Uninstall TheraTrak Pro.cmd"
 ICON_FILE = "Theratrak-Pro.ico"
 VERSION_FILE = "version.json"
+LEGACY_START_MENU_FOLDERS = ("Thorough Track Pro", "TheraTrak-Pro")
+LEGACY_ROOT_SHORTCUTS = ("TheraTrak Pro.lnk", "Uninstall TheraTrak Pro.lnk")
 
 
 def bundled_dir() -> Path:
@@ -27,6 +30,21 @@ def bundled_dir() -> Path:
 
 def install_dir() -> Path:
     return Path(os.environ["LOCALAPPDATA"]) / "Programs" / APP_NAME
+
+
+def start_menu_program_dirs() -> list[Path]:
+    candidates = [
+        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+        Path(os.environ["ProgramData"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+    ]
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        key = str(candidate).lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
 
 
 def desktop_dir() -> Path:
@@ -78,13 +96,27 @@ def get_display_version(version_path: Path) -> str:
         return "1.0.0"
 
 
-def create_shortcut(shortcut_path: Path, target_path: Path, icon_path: Path, working_dir: Path) -> None:
+def create_shortcut(
+    shortcut_path: Path,
+    target_path: Path,
+    icon_path: Path,
+    working_dir: Path,
+    arguments: str = "",
+) -> None:
+    def _ps_quote(p: Path) -> str:
+        return str(p).replace("'", "''")
+
+    if shortcut_path.exists():
+        shortcut_path.unlink()
+
     ps = f"""
 $wsh = New-Object -ComObject WScript.Shell
-$shortcut = $wsh.CreateShortcut('{shortcut_path}')
-$shortcut.TargetPath = '{target_path}'
-$shortcut.WorkingDirectory = '{working_dir}'
-$shortcut.IconLocation = '{icon_path}'
+$shortcut = $wsh.CreateShortcut('{_ps_quote(shortcut_path)}')
+$shortcut.TargetPath = '{_ps_quote(target_path)}'
+$shortcut.WorkingDirectory = '{_ps_quote(working_dir)}'
+$shortcut.IconLocation = '{_ps_quote(icon_path)},0'
+$shortcut.Arguments = '{arguments.replace("'", "''")}'
+$shortcut.Description = '{APP_NAME}'
 $shortcut.Save()
 """.strip()
     subprocess.run(
@@ -94,10 +126,56 @@ $shortcut.Save()
     )
 
 
-def write_uninstall_registry(target: Path, version: str) -> None:
+def write_uninstall_cmd(target: Path) -> Path:
+    uninstall_cmd = target / UNINSTALL_CMD
+    script = (
+        "@echo off\n"
+        "setlocal\n"
+        "set \"LOG=%TEMP%\\theratrak-uninstall.log\"\n"
+        "echo [%date% %time%] Uninstall started>\"%LOG%\"\n"
+        "cd /d \"%~dp0\"\n"
+        "echo [%date% %time%] Working dir: %cd%>>\"%LOG%\"\n"
+        "taskkill /IM \"TheraTrak Pro.exe\" /F >>\"%LOG%\" 2>&1\n"
+        "for %%P in (\"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\" \"%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\" \"%USERPROFILE%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\") do (\n"
+        "  echo [%date% %time%] Cleaning Programs root: %%~P>>\"%LOG%\"\n"
+        "  del /f /q \"%%~P\\TheraTrak Pro.lnk\" >>\"%LOG%\" 2>&1\n"
+        "  del /f /q \"%%~P\\Uninstall TheraTrak Pro.lnk\" >>\"%LOG%\" 2>&1\n"
+        "  rmdir /s /q \"%%~P\\TheraTrak Pro\" >>\"%LOG%\" 2>&1\n"
+        "  rmdir /s /q \"%%~P\\Thorough Track Pro\" >>\"%LOG%\" 2>&1\n"
+        "  rmdir /s /q \"%%~P\\TheraTrak-Pro\" >>\"%LOG%\" 2>&1\n"
+        ")\n"
+        "del /f /q \"%USERPROFILE%\\Desktop\\TheraTrak Pro.lnk\" >>\"%LOG%\" 2>&1\n"
+        "if defined OneDrive del /f /q \"%OneDrive%\\Desktop\\TheraTrak Pro.lnk\" >>\"%LOG%\" 2>&1\n"
+        "rmdir /s /q \"%LOCALAPPDATA%\\Temp\\TheraTrakUpdates\" >>\"%LOG%\" 2>&1\n"
+        "del /f /q \"%LOCALAPPDATA%\\Temp\\run_theratrak_update.bat\" >>\"%LOG%\" 2>&1\n"
+        "reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TheraTrak Pro\" /f >>\"%LOG%\" 2>&1\n"
+        "reg delete \"HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TheraTrak Pro\" /f >>\"%LOG%\" 2>&1\n"
+        "echo [%date% %time%] Refreshing Start menu host>>\"%LOG%\"\n"
+        "taskkill /IM StartMenuExperienceHost.exe /F >>\"%LOG%\" 2>&1\n"
+        "taskkill /IM explorer.exe /F >>\"%LOG%\" 2>&1\n"
+        "start \"\" explorer.exe\n"
+        "set \"TARGET=%~dp0\"\n"
+        "set \"CLEANUP=%TEMP%\\theratrak_uninstall_cleanup.cmd\"\n"
+        ">\"%CLEANUP%\" echo @echo off\n"
+        ">>\"%CLEANUP%\" echo set TARGET=%%~1\n"
+        ">>\"%CLEANUP%\" echo for /L %%%%i in ^(1,1,20^) do ^(\n"
+        ">>\"%CLEANUP%\" echo   rmdir /s /q \"%%TARGET%%\" ^>^>\"%%TEMP%%\\theratrak-uninstall.log\" 2^>^&1\n"
+        ">>\"%CLEANUP%\" echo   if not exist \"%%TARGET%%\" goto done\n"
+        ">>\"%CLEANUP%\" echo   ping 127.0.0.1 -n 2 ^>nul\n"
+        ">>\"%CLEANUP%\" echo ^)\n"
+        ">>\"%CLEANUP%\" echo :done\n"
+        ">>\"%CLEANUP%\" echo del /f /q \"%%~f0\"\n"
+        "start \"\" /min cmd /c \"\"%CLEANUP%\" \"%TARGET%\"\"\n"
+        "exit /b 0\n"
+    )
+    uninstall_cmd.write_text(script, encoding="utf-8", newline="\r\n")
+    return uninstall_cmd
+
+
+def write_uninstall_registry(target: Path, uninstall_cmd: Path, version: str) -> None:
     uninstall_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\TheraTrak Pro"
-    uninstall_exe = target / UNINSTALL_EXE
     app_exe = target / APP_EXE
+    comspec = Path(os.environ.get("ComSpec", r"C:\Windows\System32\cmd.exe"))
     key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, uninstall_path)
     try:
         winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, APP_NAME)
@@ -105,7 +183,13 @@ def write_uninstall_registry(target: Path, version: str) -> None:
         winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, "TheraTrak")
         winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, str(target))
         winreg.SetValueEx(key, "DisplayIcon", 0, winreg.REG_SZ, str(app_exe))
-        winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, f'"{uninstall_exe}"')
+        winreg.SetValueEx(
+            key,
+            "UninstallString",
+            0,
+            winreg.REG_SZ,
+            f'"{comspec}" /c ""{uninstall_cmd}""',
+        )
         winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
         winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
     finally:
@@ -126,16 +210,47 @@ def main() -> int:
             shutil.copy2(src, target / name)
 
     exe_path = target / APP_EXE
+    uninstaller_path = target / UNINSTALL_EXE
     icon_path = target / ICON_FILE
+    uninstall_cmd_path = target / UNINSTALL_CMD
+
+    missing = [
+        p.name for p in (exe_path, uninstaller_path, icon_path)
+        if not p.exists()
+    ]
+    if missing:
+        messagebox.showerror(APP_NAME, f"Install failed. Missing files: {', '.join(missing)}")
+        root.destroy()
+        return 1
+
+    uninstall_cmd_path = write_uninstall_cmd(target)
 
     desktop = desktop_dir()
-    start_menu_dir = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / APP_NAME
+    programs_dirs = start_menu_program_dirs()
+    for programs_dir in programs_dirs:
+        for legacy_name in (APP_NAME, *LEGACY_START_MENU_FOLDERS):
+            legacy_dir = programs_dir / legacy_name
+            if legacy_dir.exists() and legacy_dir.is_dir():
+                shutil.rmtree(legacy_dir, ignore_errors=True)
+        for shortcut_name in LEGACY_ROOT_SHORTCUTS:
+            try:
+                (programs_dir / shortcut_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    start_menu_dir = programs_dirs[0] / APP_NAME
     start_menu_dir.mkdir(parents=True, exist_ok=True)
 
-    create_shortcut(desktop / f"{APP_NAME}.lnk", exe_path, icon_path, target)
-    create_shortcut(start_menu_dir / f"{APP_NAME}.lnk", exe_path, icon_path, target)
-    create_shortcut(start_menu_dir / "Uninstall TheraTrak Pro.lnk", target / UNINSTALL_EXE, icon_path, target)
-    write_uninstall_registry(target, get_display_version(target / VERSION_FILE))
+    create_shortcut(desktop / f"{APP_NAME}.lnk", exe_path, exe_path, target)
+    create_shortcut(start_menu_dir / f"{APP_NAME}.lnk", exe_path, exe_path, target)
+    create_shortcut(
+        start_menu_dir / "Uninstall TheraTrak Pro.lnk",
+        Path(os.environ.get("ComSpec", r"C:\Windows\System32\cmd.exe")),
+        uninstaller_path,
+        target,
+        arguments=f'/c ""{uninstall_cmd_path}""',
+    )
+    write_uninstall_registry(target, uninstall_cmd_path, get_display_version(target / VERSION_FILE))
 
     messagebox.showinfo(
         APP_NAME,

@@ -6,19 +6,48 @@ import subprocess
 import sys
 import tempfile
 import winreg
+import ctypes
 from pathlib import Path
-from tkinter import Tk, messagebox
 
 
 APP_NAME = "TheraTrak Pro"
 APP_EXE = "TheraTrak Pro.exe"
 ICON_FILE = "Theratrak-Pro.ico"
+LEGACY_START_MENU_FOLDERS = ("Thorough Track Pro", "TheraTrak-Pro")
+LEGACY_ROOT_SHORTCUTS = ("TheraTrak Pro.lnk", "Uninstall TheraTrak Pro.lnk")
+
+MB_OK = 0x00000000
+MB_ICONINFORMATION = 0x00000040
+MB_YESNO = 0x00000004
+MB_ICONQUESTION = 0x00000020
+MB_TOPMOST = 0x00040000
+MB_SETFOREGROUND = 0x00010000
+IDYES = 6
 
 
 def install_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(os.environ["LOCALAPPDATA"]) / "Programs" / APP_NAME
+
+
+def ask_yes_no(message: str) -> bool:
+    result = ctypes.windll.user32.MessageBoxW(
+        None,
+        message,
+        APP_NAME,
+        MB_YESNO | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND,
+    )
+    return result == IDYES
+
+
+def show_info(message: str) -> None:
+    ctypes.windll.user32.MessageBoxW(
+        None,
+        message,
+        APP_NAME,
+        MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND,
+    )
 
 
 def desktop_shortcut_candidates() -> list[Path]:
@@ -36,8 +65,28 @@ def desktop_shortcut_candidates() -> list[Path]:
     return unique
 
 
-def start_menu_dir() -> Path:
-    return Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / APP_NAME
+def start_menu_program_dirs() -> list[Path]:
+    candidates = [
+        Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+        Path(os.environ["ProgramData"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+    ]
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        key = str(candidate).lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def start_menu_dirs() -> list[Path]:
+    names = [APP_NAME, *LEGACY_START_MENU_FOLDERS]
+    dirs = []
+    for programs_dir in start_menu_program_dirs():
+        for name in names:
+            dirs.append(programs_dir / name)
+    return dirs
 
 
 def remove_registry_entry() -> None:
@@ -60,10 +109,18 @@ def remove_shortcuts() -> None:
         except OSError:
             pass
 
-    try:
-        shutil.rmtree(start_menu_dir(), ignore_errors=True)
-    except OSError:
-        pass
+    for programs_dir in start_menu_program_dirs():
+        for shortcut_name in LEGACY_ROOT_SHORTCUTS:
+            try:
+                (programs_dir / shortcut_name).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    for menu_dir in start_menu_dirs():
+        try:
+            shutil.rmtree(menu_dir, ignore_errors=True)
+        except OSError:
+            pass
 
 
 def stop_running_app() -> None:
@@ -101,17 +158,7 @@ def schedule_self_delete_folder(target: Path) -> None:
 
 
 def main() -> int:
-    root = Tk()
-    root.withdraw()
-    try:
-        icon_path = install_dir() / ICON_FILE
-        if icon_path.exists():
-            root.iconbitmap(default=str(icon_path))
-    except Exception:
-        pass
-
-    if not messagebox.askyesno(APP_NAME, "Uninstall TheraTrak Pro from this computer?"):
-        root.destroy()
+    if not ask_yes_no("Uninstall TheraTrak Pro from this computer?"):
         return 0
 
     target = install_dir()
@@ -129,8 +176,7 @@ def main() -> int:
     except OSError:
         pass
 
-    messagebox.showinfo(APP_NAME, "TheraTrak Pro was uninstalled.")
-    root.destroy()
+    show_info("TheraTrak Pro was uninstalled.")
     return 0
 
 
