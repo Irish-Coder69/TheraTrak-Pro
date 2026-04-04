@@ -1699,15 +1699,18 @@ class CMS1500Tab(ttk.Frame):
         field_font = ("Arial", max(8, int(round(11 * scale))))
         line_font = ("Arial", max(7, int(round(10 * scale))))
         field_height = max(18, sy(24))
+        entry_border = "#1f2937"
 
         def add_entry(name, x, y, width, *, height=None, justify="left"):
             widget = tk.Entry(
                 surface,
                 textvariable=fld(name),
                 font=field_font,
-                bd=0,
-                relief="flat",
-                highlightthickness=0,
+                bd=1,
+                relief="solid",
+                highlightthickness=1,
+                highlightbackground=entry_border,
+                highlightcolor=entry_border,
                 bg="white",
                 fg="black",
                 insertbackground="black",
@@ -1730,9 +1733,11 @@ class CMS1500Tab(ttk.Frame):
                 surface,
                 textvariable=var,
                 font=line_font,
-                bd=0,
-                relief="flat",
-                highlightthickness=0,
+                bd=1,
+                relief="solid",
+                highlightthickness=1,
+                highlightbackground=entry_border,
+                highlightcolor=entry_border,
                 bg="white",
                 fg="black",
                 insertbackground="black",
