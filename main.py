@@ -207,8 +207,14 @@ class UserDirectoryDialog(tk.Toplevel):
         super().__init__(parent)
         apply_window_icon(self)
         self.title("User Directory")
-        self.geometry("1150x540")
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        self.geometry(f"{max(1150, screen_w - 30)}x{max(540, screen_h - 90)}+0+0")
         self.resizable(True, True)
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            pass
         self._edit_uid = None
         self._rows = []
         self._vars = {}
