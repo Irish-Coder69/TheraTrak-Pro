@@ -2698,19 +2698,21 @@ class TheraTrakApp(tk.Tk):
             ")",
             "start \"\" /wait \"%INSTALLER%\"",
             "if not \"%APP_EXE%\"==\"\" if exist \"%APP_EXE%\" start \"\" \"%APP_EXE%\"",
-            "del /f /q \"%~f0\"",
+            "set \"SELF=%~f0\"",
+            "start \"\" /min cmd /c ping 127.0.0.1 -n 3 ^>nul ^& del /f /q \"%SELF%\"",
+            "exit /b 0",
         ]
 
         updater_bat.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+        _append_startup_log(f"Prepared updater script: {updater_bat}")
 
+        comspec = os.environ.get("ComSpec", r"C:\\Windows\\System32\\cmd.exe")
+        launch_cmd = f'"{updater_bat}"'
         subprocess.Popen(
             [
-                os.environ.get("ComSpec", r"C:\\Windows\\System32\\cmd.exe"),
+                comspec,
                 "/c",
-                "start",
-                "",
-                "/min",
-                str(updater_bat),
+                launch_cmd,
             ],
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
