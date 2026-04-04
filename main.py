@@ -9,6 +9,8 @@ Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tkinter as tk
 import tkinter.font as tkFont
@@ -56,6 +58,7 @@ STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
 
 GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/Irish-Coder69/TheraTrak-Pro/releases/latest"
 GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/latest"
+UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
 
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
@@ -2554,6 +2557,65 @@ class TheraTrakApp(tk.Tk):
             nums.append(0)
         return tuple(nums[:4])
 
+    def _pick_installer_asset(self, payload):
+        assets = payload.get("assets") or []
+        for asset in assets:
+            name = (asset.get("name") or "").lower()
+            if name.endswith(".exe") and "installer" in name:
+                return asset
+        for asset in assets:
+            name = (asset.get("name") or "").lower()
+            if name.endswith(".exe"):
+                return asset
+        return None
+
+    def _backup_database_for_update(self):
+        db_path = Path(db.DB_PATH)
+        if not db_path.exists():
+            return None
+        backup_dir = UPDATE_TEMP_DIR / "backup"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = backup_dir / f"theratrak_preupdate_{ts}.db"
+        shutil.copy2(db_path, backup_path)
+        return backup_path
+
+    def _launch_installer_after_exit(self, installer_path):
+        app_exe = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        updater_bat = UPDATE_TEMP_DIR / "run_theratrak_update.bat"
+        app_name = "TheraTrak Pro.exe"
+
+        lines = [
+            "@echo off",
+            "setlocal",
+            f"set \"INSTALLER={installer_path}\"",
+            f"set \"APP_NAME={app_name}\"",
+            f"set \"APP_EXE={app_exe if app_exe else ''}\"",
+            ":wait_close",
+            "tasklist /FI \"IMAGENAME eq %APP_NAME%\" | find /I \"%APP_NAME%\" >nul",
+            "if not errorlevel 1 (",
+            "  ping 127.0.0.1 -n 2 >nul",
+            "  goto wait_close",
+            ")",
+            "start \"\" /wait \"%INSTALLER%\"",
+            "if not \"%APP_EXE%\"==\"\" if exist \"%APP_EXE%\" start \"\" \"%APP_EXE%\"",
+            "del /f /q \"%~f0\"",
+        ]
+
+        updater_bat.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+
+        subprocess.Popen(
+            [
+                os.environ.get("ComSpec", r"C:\\Windows\\System32\\cmd.exe"),
+                "/c",
+                "start",
+                "",
+                "/min",
+                str(updater_bat),
+            ],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
     def _check_for_updates(self):
         current_ver = self._version
         current_tuple = self._parse_version_tuple(current_ver)
@@ -2582,17 +2644,74 @@ class TheraTrakApp(tk.Tk):
         latest_tag = payload.get("tag_name") or payload.get("name") or ""
         latest_tuple = self._parse_version_tuple(latest_tag)
         release_url = payload.get("html_url") or GITHUB_RELEASES_PAGE
+        installer_asset = self._pick_installer_asset(payload)
 
         if latest_tuple > current_tuple:
-            open_page = messagebox.askyesno(
+            do_update = messagebox.askyesno(
                 "Update Available",
                 "A newer version of TheraTrak Pro is available.\n\n"
                 f"Current Version: {current_ver}\n"
                 f"Latest Version: {latest_tag or 'Unknown'}\n\n"
-                "Open the download page now?"
+                "Download and install it now?"
             )
-            if open_page:
+            if not do_update:
+                return
+
+            if not installer_asset:
+                messagebox.showwarning(
+                    "Update Available",
+                    "No installer asset was found on the latest release.\n\n"
+                    "Opening releases page instead."
+                )
                 webbrowser.open(release_url)
+                return
+
+            asset_url = installer_asset.get("browser_download_url")
+            asset_name = installer_asset.get("name") or "TheraTrak-Pro-Installer.exe"
+            if not asset_url:
+                webbrowser.open(release_url)
+                return
+
+            UPDATE_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+            installer_path = UPDATE_TEMP_DIR / asset_name
+
+            try:
+                req = urllib.request.Request(asset_url, headers={"User-Agent": "TheraTrak-Pro"})
+                with urllib.request.urlopen(req, timeout=60) as resp, installer_path.open("wb") as out_f:
+                    shutil.copyfileobj(resp, out_f)
+                backup_path = self._backup_database_for_update()
+            except Exception as ex:
+                messagebox.showerror(
+                    "Update Failed",
+                    "Could not download the installer automatically.\n\n"
+                    f"Error: {ex}\n\n"
+                    "Opening releases page instead."
+                )
+                webbrowser.open(release_url)
+                return
+
+            backup_msg = f"\nDatabase backup created at:\n{backup_path}" if backup_path else ""
+            proceed = messagebox.askyesno(
+                "Ready to Install Update",
+                "The installer has been downloaded.\n\n"
+                "TheraTrak Pro will now close, install the update, and reopen automatically.\n"
+                "Your user profiles, patient records, and billing data will be preserved."
+                f"{backup_msg}\n\n"
+                "Continue?"
+            )
+            if not proceed:
+                return
+
+            try:
+                self._launch_installer_after_exit(installer_path)
+            except Exception as ex:
+                messagebox.showerror(
+                    "Update Failed",
+                    f"Could not start the installer: {ex}"
+                )
+                return
+
+            self.after(150, self._on_close)
             return
 
         if latest_tuple == current_tuple:
