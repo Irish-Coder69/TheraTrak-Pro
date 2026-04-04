@@ -21,6 +21,12 @@ from datetime import date, datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
 import database as db
 import version_manager as vm
 from app_paths import APP_ROOT, DB_FILE, ICON_FILE, VERSION_FILE
@@ -1642,14 +1648,37 @@ class CMS1500Tab(ttk.Frame):
         if not sample_image.exists():
             return 0
 
-        try:
-            raw_img = tk.PhotoImage(file=str(sample_image))
-        except tk.TclError:
-            return 0
-
         max_width = 980
-        scale = max(1, (raw_img.width() + max_width - 1) // max_width)
-        display_img = raw_img.subsample(scale, scale) if scale > 1 else raw_img
+        raw_img = None
+        display_img = None
+
+        # Prefer Pillow for reliable PNG support in packaged builds.
+        if Image is not None and ImageTk is not None:
+            try:
+                pil_img = Image.open(sample_image)
+                if pil_img.width > max_width:
+                    ratio = max_width / float(pil_img.width)
+                    new_size = (max_width, int(pil_img.height * ratio))
+                    pil_img = pil_img.resize(new_size, Image.Resampling.LANCZOS)
+                raw_img = pil_img
+                display_img = ImageTk.PhotoImage(pil_img)
+            except Exception:
+                raw_img = None
+                display_img = None
+
+        if display_img is None:
+            try:
+                tk_img = tk.PhotoImage(file=str(sample_image))
+            except tk.TclError:
+                ttk.Label(
+                    parent,
+                    text="CMS-1500 sample form image could not be loaded.",
+                    foreground=DANGER,
+                ).grid(row=0, column=0, columnspan=4, sticky="w", padx=4, pady=(2, 8))
+                return 1
+            scale = max(1, (tk_img.width() + max_width - 1) // max_width)
+            raw_img = tk_img
+            display_img = tk_img.subsample(scale, scale) if scale > 1 else tk_img
 
         # Keep references alive so Tk does not garbage-collect the image.
         self._cms_preview_raw = raw_img
