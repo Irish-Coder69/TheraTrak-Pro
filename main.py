@@ -2580,6 +2580,64 @@ class TheraTrakApp(tk.Tk):
         shutil.copy2(db_path, backup_path)
         return backup_path
 
+    def _download_file_with_progress(self, url, destination):
+        progress_win = tk.Toplevel(self)
+        apply_window_icon(progress_win)
+        progress_win.title("Downloading Update")
+        progress_win.resizable(False, False)
+        progress_win.transient(self)
+        progress_win.grab_set()
+        progress_win.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        frame = ttk.Frame(progress_win, padding=12)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Downloading latest installer...").pack(anchor="w")
+        status_var = tk.StringVar(value="Starting download...")
+        ttk.Label(frame, textvariable=status_var).pack(anchor="w", pady=(6, 8))
+
+        bar = ttk.Progressbar(frame, orient="horizontal", length=380, mode="indeterminate")
+        bar.pack(fill="x")
+
+        progress_win.update_idletasks()
+        width = max(420, progress_win.winfo_reqwidth())
+        height = max(120, progress_win.winfo_reqheight())
+        x = max(0, (progress_win.winfo_screenwidth() - width) // 2)
+        y = max(0, (progress_win.winfo_screenheight() - height) // 2)
+        progress_win.geometry(f"{width}x{height}+{x}+{y}")
+
+        downloaded = 0
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "TheraTrak-Pro"})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                total_raw = resp.headers.get("Content-Length")
+                total = int(total_raw) if total_raw and total_raw.isdigit() else 0
+
+                if total > 0:
+                    bar.configure(mode="determinate", maximum=total, value=0)
+                else:
+                    bar.start(12)
+
+                with destination.open("wb") as out_f:
+                    while True:
+                        chunk = resp.read(1024 * 128)
+                        if not chunk:
+                            break
+                        out_f.write(chunk)
+                        downloaded += len(chunk)
+
+                        if total > 0:
+                            bar["value"] = downloaded
+                            pct = min(100.0, (downloaded / total) * 100.0)
+                            status_var.set(f"Downloaded {pct:.1f}% ({downloaded // 1024} KB of {total // 1024} KB)")
+                        else:
+                            status_var.set(f"Downloaded {downloaded // 1024} KB")
+
+                        progress_win.update_idletasks()
+        finally:
+            if bar.cget("mode") == "indeterminate":
+                bar.stop()
+            progress_win.destroy()
+
     def _launch_installer_after_exit(self, installer_path):
         app_exe = Path(sys.executable) if getattr(sys, "frozen", False) else None
         updater_bat = UPDATE_TEMP_DIR / "run_theratrak_update.bat"
@@ -2676,9 +2734,7 @@ class TheraTrakApp(tk.Tk):
             installer_path = UPDATE_TEMP_DIR / asset_name
 
             try:
-                req = urllib.request.Request(asset_url, headers={"User-Agent": "TheraTrak-Pro"})
-                with urllib.request.urlopen(req, timeout=60) as resp, installer_path.open("wb") as out_f:
-                    shutil.copyfileobj(resp, out_f)
+                self._download_file_with_progress(asset_url, installer_path)
                 backup_path = self._backup_database_for_update()
             except Exception as ex:
                 messagebox.showerror(
