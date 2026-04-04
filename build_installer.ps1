@@ -9,6 +9,7 @@ $mainPy = Join-Path $root 'main.py'
 $installerPy = Join-Path $root 'installer\installer.py'
 $uninstallerPy = Join-Path $root 'installer\uninstaller.py'
 $versionJson = Join-Path $root 'version.json'
+$assetsDir = Join-Path $root 'assets'
 $distDir = Join-Path $root 'dist'
 $buildDir = Join-Path $root 'build'
 $releaseDir = Join-Path $root 'release'
@@ -40,6 +41,7 @@ $pyInstallerArgs = @(
     '--specpath', $buildDir,
     '--collect-all', 'PIL',
     '--collect-all', 'reportlab',
+    '--add-data', ($assetsDir + ';assets'),
     $mainPy
 )
 
