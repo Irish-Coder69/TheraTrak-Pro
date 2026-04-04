@@ -1701,13 +1701,14 @@ class CMS1500Tab(ttk.Frame):
         field_height = max(18, sy(24))
         mini_height = max(14, sy(18))
         entry_border = "#1f2937"
-        # Global alignment nudges for the scanned form background.
-        field_x_nudge = 0
-        field_y_nudge = 4
-        line_x_nudge = 0
-        line_y_nudge = 2
+        # Section-specific nudges tuned against the current sample form scan.
+        top_x_nudge, top_y_nudge = 1, 3
+        mid_x_nudge, mid_y_nudge = 1, 3
+        dx_x_nudge, dx_y_nudge = 1, 2
+        line_x_nudge, line_y_nudge = 1, 2
+        bot_x_nudge, bot_y_nudge = 1, 2
 
-        def add_entry(name, x, y, width, *, height=None, justify="left"):
+        def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             widget = tk.Entry(
                 surface,
                 textvariable=fld(name),
@@ -1723,8 +1724,8 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             surface.create_window(
-                sx(x + field_x_nudge),
-                sy(y + field_y_nudge),
+                sx(x + x_nudge),
+                sy(y + y_nudge),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
@@ -1732,7 +1733,7 @@ class CMS1500Tab(ttk.Frame):
             )
             return widget
 
-        def add_service_entry(var_map, name, x, y, width, *, justify="left"):
+        def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0):
             var = tk.StringVar()
             var_map[name] = var
             widget = tk.Entry(
@@ -1750,149 +1751,164 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             surface.create_window(
-                sx(x + line_x_nudge),
-                sy(y + line_y_nudge),
+                sx(x + x_nudge),
+                sy(y + y_nudge),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
                 height=max(16, sy(22)),
             )
 
+        def add_top_entry(name, x, y, width, **kwargs):
+            return add_entry(name, x, y, width, x_nudge=top_x_nudge, y_nudge=top_y_nudge, **kwargs)
+
+        def add_mid_entry(name, x, y, width, **kwargs):
+            return add_entry(name, x, y, width, x_nudge=mid_x_nudge, y_nudge=mid_y_nudge, **kwargs)
+
+        def add_dx_entry(name, x, y, width, **kwargs):
+            return add_entry(name, x, y, width, x_nudge=dx_x_nudge, y_nudge=dx_y_nudge, **kwargs)
+
+        def add_bottom_entry(name, x, y, width, **kwargs):
+            return add_entry(name, x, y, width, x_nudge=bot_x_nudge, y_nudge=bot_y_nudge, **kwargs)
+
+        def add_line_entry(var_map, name, x, y, width, **kwargs):
+            return add_service_entry(var_map, name, x, y, width, x_nudge=line_x_nudge, y_nudge=line_y_nudge, **kwargs)
+
         # Top / patient / insured area
-        add_entry("ins_type_medicare", 434, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_medicaid", 489, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_tricare", 548, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_champva", 604, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_group", 663, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_feca", 718, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type_other", 771, 183, 28, height=mini_height, justify="center")
-        add_entry("ins_type", 808, 183, 110)
-        add_entry("ins_id", 760, 208, 360)
-        add_entry("patient_name", 44, 279, 372)
-        add_entry("patient_dob", 492, 281, 110, justify="center")
-        add_entry("patient_sex", 675, 281, 40, justify="center")
-        add_entry("ins_name", 760, 279, 368)
-        add_entry("patient_address", 40, 333, 386)
-        add_entry("ins_relation", 485, 333, 195)
-        add_entry("ins_address2", 760, 333, 368)
-        add_entry("patient_city", 40, 386, 335)
-        add_entry("patient_state", 392, 386, 36, justify="center")
-        add_entry("patient_zip", 40, 444, 158)
-        add_entry("ins_city2", 760, 386, 318)
-        add_entry("ins_state2", 1088, 386, 38, justify="center")
-        add_entry("patient_phone", 216, 444, 210, justify="center")
-        add_entry("ins_zip2", 760, 444, 150)
-        add_entry("ins_group", 760, 499, 368)
-        add_entry("ins_plan", 760, 617, 368)
-        add_entry("ins_phone", 934, 444, 192, justify="center")
-        add_entry("patient_status", 486, 444, 193)
-        add_entry("patient_status_single", 488, 472, 28, height=mini_height, justify="center")
-        add_entry("patient_status_married", 535, 472, 28, height=mini_height, justify="center")
-        add_entry("patient_status_other", 582, 472, 28, height=mini_height, justify="center")
-        add_entry("patient_status_employed", 488, 500, 28, height=mini_height, justify="center")
-        add_entry("patient_status_full_time", 535, 500, 28, height=mini_height, justify="center")
-        add_entry("patient_status_part_time", 582, 500, 28, height=mini_height, justify="center")
-        add_entry("other_ins_name", 40, 500, 386)
-        add_entry("other_ins_policy", 40, 556, 386)
-        add_entry("reserved_nucc_b", 40, 614, 386)
-        add_entry("reserved_nucc_c", 40, 672, 386)
-        add_entry("other_ins_dob", 434, 558, 144, justify="center")
-        add_entry("other_ins_sex", 604, 558, 72, justify="center")
-        add_entry("other_ins_employer", 434, 615, 242)
-        add_entry("patient_sig", 110, 738, 338)
-        add_entry("ins_dob", 816, 555, 178, justify="center")
-        add_entry("ins_sex", 1036, 555, 36, justify="center")
-        add_entry("other_claim_id", 760, 613, 368)
-        add_entry("ins_sig", 787, 738, 300)
-        add_entry("other_plan", 40, 672, 386)
-        add_entry("other_plan_yes", 434, 675, 28, height=mini_height, justify="center")
-        add_entry("other_plan_no", 482, 675, 28, height=mini_height, justify="center")
-        add_entry("patient_auth_yes", 433, 739, 26, height=mini_height, justify="center")
-        add_entry("patient_auth_no", 461, 739, 26, height=mini_height, justify="center")
+        add_top_entry("ins_type_medicare", 434, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_medicaid", 489, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_tricare", 548, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_champva", 604, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_group", 663, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_feca", 718, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type_other", 771, 183, 28, height=mini_height, justify="center")
+        add_top_entry("ins_type", 808, 183, 110)
+        add_top_entry("ins_id", 760, 208, 360)
+        add_top_entry("patient_name", 44, 279, 372)
+        add_top_entry("patient_dob", 492, 281, 110, justify="center")
+        add_top_entry("patient_sex", 675, 281, 40, justify="center")
+        add_top_entry("ins_name", 760, 279, 368)
+        add_top_entry("patient_address", 40, 333, 386)
+        add_top_entry("ins_relation", 485, 333, 195)
+        add_top_entry("ins_address2", 760, 333, 368)
+        add_top_entry("patient_city", 40, 386, 335)
+        add_top_entry("patient_state", 392, 386, 36, justify="center")
+        add_top_entry("patient_zip", 40, 444, 158)
+        add_top_entry("ins_city2", 760, 386, 318)
+        add_top_entry("ins_state2", 1088, 386, 38, justify="center")
+        add_top_entry("patient_phone", 216, 444, 210, justify="center")
+        add_top_entry("ins_zip2", 760, 444, 150)
+        add_top_entry("ins_group", 760, 499, 368)
+        add_top_entry("ins_plan", 760, 617, 368)
+        add_top_entry("ins_phone", 934, 444, 192, justify="center")
+        add_top_entry("patient_status", 486, 444, 193)
+        add_top_entry("patient_status_single", 488, 472, 28, height=mini_height, justify="center")
+        add_top_entry("patient_status_married", 535, 472, 28, height=mini_height, justify="center")
+        add_top_entry("patient_status_other", 582, 472, 28, height=mini_height, justify="center")
+        add_top_entry("patient_status_employed", 488, 500, 28, height=mini_height, justify="center")
+        add_top_entry("patient_status_full_time", 535, 500, 28, height=mini_height, justify="center")
+        add_top_entry("patient_status_part_time", 582, 500, 28, height=mini_height, justify="center")
+        add_top_entry("other_ins_name", 40, 500, 386)
+        add_top_entry("other_ins_policy", 40, 556, 386)
+        add_top_entry("reserved_nucc_b", 40, 614, 386)
+        add_top_entry("reserved_nucc_c", 40, 672, 386)
+        add_top_entry("other_ins_dob", 434, 558, 144, justify="center")
+        add_top_entry("other_ins_sex", 604, 558, 72, justify="center")
+        add_top_entry("other_ins_employer", 434, 615, 242)
+        add_top_entry("patient_sig", 110, 738, 338)
+        add_top_entry("ins_dob", 816, 555, 178, justify="center")
+        add_top_entry("ins_sex", 1036, 555, 36, justify="center")
+        add_top_entry("other_claim_id", 760, 613, 368)
+        add_top_entry("ins_sig", 787, 738, 300)
+        add_top_entry("other_plan", 40, 672, 386)
+        add_top_entry("other_plan_yes", 434, 675, 28, height=mini_height, justify="center")
+        add_top_entry("other_plan_no", 482, 675, 28, height=mini_height, justify="center")
+        add_top_entry("patient_auth_yes", 433, 739, 26, height=mini_height, justify="center")
+        add_top_entry("patient_auth_no", 461, 739, 26, height=mini_height, justify="center")
 
-        add_entry("patient_sig_date", 502, 738, 120, justify="center")
+        add_top_entry("patient_sig_date", 502, 738, 120, justify="center")
         # Mid form
-        add_entry("illness_date", 38, 819, 148)
-        add_entry("ref_provider", 38, 876, 370)
-        add_entry("ref_npi", 459, 876, 58)
-        add_entry("illness_qual", 206, 819, 72, justify="center")
-        add_entry("other_date", 432, 819, 149, justify="center")
-        add_entry("other_date_qual", 600, 819, 63, justify="center")
-        add_entry("unable_from", 816, 819, 127, justify="center")
-        add_entry("unable_to", 997, 819, 128, justify="center")
-        add_entry("add_info", 38, 935, 640)
-        add_entry("ref_qual", 421, 876, 38, justify="center")
-        add_entry("auth_number", 760, 990, 368)
-        add_entry("hospital_from", 817, 876, 128, justify="center")
-        add_entry("hospital_to", 998, 876, 128, justify="center")
+        add_mid_entry("illness_date", 38, 819, 148)
+        add_mid_entry("ref_provider", 38, 876, 370)
+        add_mid_entry("ref_npi", 459, 876, 58)
+        add_mid_entry("illness_qual", 206, 819, 72, justify="center")
+        add_mid_entry("other_date", 432, 819, 149, justify="center")
+        add_mid_entry("other_date_qual", 600, 819, 63, justify="center")
+        add_mid_entry("unable_from", 816, 819, 127, justify="center")
+        add_mid_entry("unable_to", 997, 819, 128, justify="center")
+        add_mid_entry("add_info", 38, 935, 640)
+        add_mid_entry("ref_qual", 421, 876, 38, justify="center")
+        add_mid_entry("auth_number", 760, 990, 368)
+        add_mid_entry("hospital_from", 817, 876, 128, justify="center")
+        add_mid_entry("hospital_to", 998, 876, 128, justify="center")
 
-        add_entry("outside_lab", 816, 935, 114, justify="center")
-        add_entry("outside_lab_charge", 972, 935, 152, justify="right")
-        add_entry("related_emp_yes", 760, 500, 28, height=mini_height, justify="center")
-        add_entry("related_emp_no", 792, 500, 28, height=mini_height, justify="center")
-        add_entry("related_auto_yes", 760, 530, 28, height=mini_height, justify="center")
-        add_entry("related_auto_no", 792, 530, 28, height=mini_height, justify="center")
-        add_entry("related_auto_state", 826, 530, 42, height=mini_height, justify="center")
-        add_entry("related_other_yes", 760, 560, 28, height=mini_height, justify="center")
-        add_entry("related_other_no", 792, 560, 28, height=mini_height, justify="center")
-        add_entry("reserved_local_use", 760, 588, 368)
+        add_mid_entry("outside_lab", 816, 935, 114, justify="center")
+        add_mid_entry("outside_lab_charge", 972, 935, 152, justify="right")
+        add_mid_entry("related_emp_yes", 760, 500, 28, height=mini_height, justify="center")
+        add_mid_entry("related_emp_no", 792, 500, 28, height=mini_height, justify="center")
+        add_mid_entry("related_auto_yes", 760, 530, 28, height=mini_height, justify="center")
+        add_mid_entry("related_auto_no", 792, 530, 28, height=mini_height, justify="center")
+        add_mid_entry("related_auto_state", 826, 530, 42, height=mini_height, justify="center")
+        add_mid_entry("related_other_yes", 760, 560, 28, height=mini_height, justify="center")
+        add_mid_entry("related_other_no", 792, 560, 28, height=mini_height, justify="center")
+        add_mid_entry("reserved_local_use", 760, 588, 368)
         # Diagnosis box
-        add_entry("dx1", 95, 973, 110)
-        add_entry("dx2", 286, 973, 110)
-        add_entry("dx3", 477, 973, 110)
-        add_entry("dx4", 669, 973, 110)
-        add_entry("dx5", 95, 1003, 110)
-        add_entry("dx6", 286, 1003, 110)
-        add_entry("dx7", 477, 1003, 110)
-        add_entry("dx8", 669, 1003, 110)
-        add_entry("dx9", 95, 1033, 110)
-        add_entry("dx10", 286, 1033, 110)
-        add_entry("dx11", 477, 1033, 110)
-        add_entry("dx12", 669, 1033, 110)
+        add_dx_entry("dx1", 95, 973, 110)
+        add_dx_entry("dx2", 286, 973, 110)
+        add_dx_entry("dx3", 477, 973, 110)
+        add_dx_entry("dx4", 669, 973, 110)
+        add_dx_entry("dx5", 95, 1003, 110)
+        add_dx_entry("dx6", 286, 1003, 110)
+        add_dx_entry("dx7", 477, 1003, 110)
+        add_dx_entry("dx8", 669, 1003, 110)
+        add_dx_entry("dx9", 95, 1033, 110)
+        add_dx_entry("dx10", 286, 1033, 110)
+        add_dx_entry("dx11", 477, 1033, 110)
+        add_dx_entry("dx12", 669, 1033, 110)
 
-        add_entry("resubmission_code", 816, 970, 108, justify="center")
-        add_entry("original_ref_no", 936, 970, 188)
+        add_dx_entry("resubmission_code", 816, 970, 108, justify="center")
+        add_dx_entry("original_ref_no", 936, 970, 188)
         # Service lines
         line_y = [1046, 1103, 1160, 1217, 1274, 1331]
         for y in line_y:
             sl_row = {}
-            add_service_entry(sl_row, "from_date", 47, y, 108)
-            add_service_entry(sl_row, "to_date", 162, y, 108)
-            add_service_entry(sl_row, "pos", 285, y, 40, justify="center")
-            add_service_entry(sl_row, "cpt", 369, y, 96, justify="center")
-            add_service_entry(sl_row, "modifier", 468, y, 110, justify="center")
-            add_service_entry(sl_row, "dx_ptr", 648, y, 60, justify="center")
-            add_service_entry(sl_row, "charge", 769, y, 84, justify="right")
-            add_service_entry(sl_row, "units", 872, y, 42, justify="center")
-            add_service_entry(sl_row, "epsdt", 919, y, 24, justify="center")
-            add_service_entry(sl_row, "family_plan", 946, y, 30, justify="center")
-            add_service_entry(sl_row, "id_qual", 979, y, 34, justify="center")
-            add_service_entry(sl_row, "npi", 1000, y, 124, justify="center")
+            add_line_entry(sl_row, "from_date", 47, y, 108)
+            add_line_entry(sl_row, "to_date", 162, y, 108)
+            add_line_entry(sl_row, "pos", 285, y, 40, justify="center")
+            add_line_entry(sl_row, "cpt", 369, y, 96, justify="center")
+            add_line_entry(sl_row, "modifier", 468, y, 110, justify="center")
+            add_line_entry(sl_row, "dx_ptr", 648, y, 60, justify="center")
+            add_line_entry(sl_row, "charge", 769, y, 84, justify="right")
+            add_line_entry(sl_row, "units", 872, y, 42, justify="center")
+            add_line_entry(sl_row, "epsdt", 919, y, 24, justify="center")
+            add_line_entry(sl_row, "family_plan", 946, y, 30, justify="center")
+            add_line_entry(sl_row, "id_qual", 979, y, 34, justify="center")
+            add_line_entry(sl_row, "npi", 1000, y, 124, justify="center")
             self._sl_vars.append(sl_row)
 
         # Bottom / provider area
-        add_entry("tax_id", 38, 1361, 116)
-        add_entry("tax_id_type", 223, 1361, 44, justify="center")
-        add_entry("patient_acct", 381, 1361, 160)
-        add_entry("accept_assign", 605, 1361, 84, justify="center")
-        add_entry("total_charge", 774, 1361, 116, justify="right")
-        add_entry("amount_paid", 928, 1361, 98, justify="right")
-        add_entry("provider_sig", 38, 1421, 250)
-        add_entry("provider_sig_date", 294, 1421, 66, justify="center")
-        add_entry("billing_date", 271, 1497, 88, justify="center")
-        add_entry("facility_name", 378, 1421, 268)
-        add_entry("facility_address", 378, 1456, 268)
-        add_entry("facility_city_state_zip", 378, 1488, 268)
-        add_entry("facility_qualifier", 472, 1497, 24, justify="center")
-        add_entry("facility_npi", 496, 1497, 148, justify="center")
-        add_entry("facility_other_id", 661, 1497, 148, justify="center")
-        add_entry("billing_name", 771, 1421, 270)
-        add_entry("billing_address", 771, 1456, 270)
-        add_entry("billing_city_state_zip", 771, 1488, 270)
-        add_entry("billing_phone", 1000, 1361, 130, justify="center")
-        add_entry("billing_qualifier", 756, 1497, 24, justify="center")
-        add_entry("billing_npi", 780, 1497, 148, justify="center")
-        add_entry("billing_other_id", 947, 1497, 178, justify="center")
+        add_bottom_entry("tax_id", 38, 1361, 116)
+        add_bottom_entry("tax_id_type", 223, 1361, 44, justify="center")
+        add_bottom_entry("patient_acct", 381, 1361, 160)
+        add_bottom_entry("accept_assign", 605, 1361, 84, justify="center")
+        add_bottom_entry("total_charge", 774, 1361, 116, justify="right")
+        add_bottom_entry("amount_paid", 928, 1361, 98, justify="right")
+        add_bottom_entry("provider_sig", 38, 1421, 250)
+        add_bottom_entry("provider_sig_date", 294, 1421, 66, justify="center")
+        add_bottom_entry("billing_date", 271, 1497, 88, justify="center")
+        add_bottom_entry("facility_name", 378, 1421, 268)
+        add_bottom_entry("facility_address", 378, 1456, 268)
+        add_bottom_entry("facility_city_state_zip", 378, 1488, 268)
+        add_bottom_entry("facility_qualifier", 472, 1497, 24, justify="center")
+        add_bottom_entry("facility_npi", 496, 1497, 148, justify="center")
+        add_bottom_entry("facility_other_id", 661, 1497, 148, justify="center")
+        add_bottom_entry("billing_name", 771, 1421, 270)
+        add_bottom_entry("billing_address", 771, 1456, 270)
+        add_bottom_entry("billing_city_state_zip", 771, 1488, 270)
+        add_bottom_entry("billing_phone", 1000, 1361, 130, justify="center")
+        add_bottom_entry("billing_qualifier", 756, 1497, 24, justify="center")
+        add_bottom_entry("billing_npi", 780, 1497, 148, justify="center")
+        add_bottom_entry("billing_other_id", 947, 1497, 178, justify="center")
 
         lookup_btn = ttk.Button(
             parent,
