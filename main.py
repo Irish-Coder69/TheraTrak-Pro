@@ -1746,8 +1746,8 @@ class CMS1500Tab(ttk.Frame):
         def sy(value):
             return int(round(value * scale))
 
-        field_font = ("Arial", max(8, int(round(11 * scale))))
-        line_font = ("Arial", max(7, int(round(10 * scale))))
+        field_font = ("Arial", 12)
+        line_font = ("Arial", 12)
         field_height = max(18, sy(24))
         mini_height = max(14, sy(18))
         entry_border = "#1f2937"
@@ -2208,7 +2208,48 @@ class CMS1500Tab(ttk.Frame):
             entry = {k: v.get().strip() for k, v in sl.items()}
             if any(entry.values()):
                 fd["service_lines"].append(entry)
+        fd["alignment_offsets"] = {
+            "section_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_offsets.items()
+            },
+            "field_offsets": {
+                key: [int(round(vals[0])), int(round(vals[1]))]
+                for key, vals in self._overlay_field_offsets.items()
+            },
+        }
         return fd
+
+    def _alignment_section_for_field(self, field_name):
+        if field_name.startswith("sl"):
+            return "line"
+        if field_name.startswith("dx") or field_name in {"resubmission_code", "original_ref_no"}:
+            return "dx"
+        if field_name in {
+            "illness_date", "ref_provider", "ref_npi", "illness_qual", "other_date",
+            "other_date_qual", "unable_from", "unable_to", "add_info", "ref_qual",
+            "auth_number", "hospital_from", "hospital_to", "outside_lab",
+            "outside_lab_charge", "related_emp_yes", "related_emp_no", "related_auto_yes",
+            "related_auto_no", "related_auto_state", "related_other_yes",
+            "related_other_no", "reserved_local_use",
+        }:
+            return "mid"
+        if field_name in {
+            "tax_id", "tax_id_type", "patient_acct", "accept_assign", "total_charge",
+            "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
+            "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
+            "facility_npi", "facility_other_id", "billing_name", "billing_address",
+            "billing_city_state_zip", "billing_phone", "billing_qualifier", "billing_npi",
+            "billing_other_id",
+        }:
+            return "bot"
+        return "top"
+
+    def _preview_aligned_xy(self, field_name, x, y, section_offsets, field_offsets):
+        section = self._alignment_section_for_field(field_name)
+        sec_x, sec_y = section_offsets.get(section, [0, 0])
+        fld_x, fld_y = field_offsets.get(field_name, [0, 0])
+        return x + sec_x + fld_x, y + sec_y + fld_y
 
     def _save_claim(self):
         fd = self._collect_form_data()
@@ -2300,8 +2341,12 @@ class CMS1500Tab(ttk.Frame):
         def sy(v):
             return int(round(v * scale))
 
-        font_size = max(7, int(round(11 * scale)))
-        line_size = max(6, int(round(10 * scale)))
+        font_size = 12
+        line_size = 12
+
+        alignment = fd.get("alignment_offsets", {})
+        section_offsets = alignment.get("section_offsets", self._overlay_offsets)
+        field_offsets = alignment.get("field_offsets", self._overlay_field_offsets)
 
         def draw_field(name, x, y, *, size=None, anchor="nw"):
             val = fd.get(name, "")
@@ -2310,9 +2355,10 @@ class CMS1500Tab(ttk.Frame):
             text = str(val).strip()
             if not text:
                 return
+            ax, ay = self._preview_aligned_xy(name, x, y, section_offsets, field_offsets)
             cv.create_text(
-                sx(x),
-                sy(y),
+                sx(ax),
+                sy(ay),
                 text=text,
                 anchor=anchor,
                 fill="black",
@@ -2411,7 +2457,9 @@ class CMS1500Tab(ttk.Frame):
             def draw_sl(key, x):
                 txt = str(sl.get(key, "") or "").strip()
                 if txt:
-                    cv.create_text(sx(x), sy(y), text=txt, anchor="nw", fill="black", font=("Arial", line_size))
+                    sl_field = f"sl{i+1}_{key}"
+                    ax, ay = self._preview_aligned_xy(sl_field, x, y, section_offsets, field_offsets)
+                    cv.create_text(sx(ax), sy(ay), text=txt, anchor="nw", fill="black", font=("Arial", line_size))
 
             draw_sl("from_date", 47)
             draw_sl("to_date", 162)

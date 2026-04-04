@@ -81,6 +81,42 @@ def build_cms1500_pdf(output_path: str, fd: dict) -> bool:
     return True
 
 
+def _alignment_section_for_field(field_name: str) -> str:
+    if field_name.startswith("sl"):
+        return "line"
+    if field_name.startswith("dx") or field_name in {"resubmission_code", "original_ref_no"}:
+        return "dx"
+    if field_name in {
+        "illness_date", "ref_provider", "ref_npi", "illness_qual", "other_date",
+        "other_date_qual", "unable_from", "unable_to", "add_info", "ref_qual",
+        "auth_number", "hospital_from", "hospital_to", "outside_lab",
+        "outside_lab_charge", "related_emp_yes", "related_emp_no", "related_auto_yes",
+        "related_auto_no", "related_auto_state", "related_other_yes", "related_other_no",
+        "reserved_local_use",
+    }:
+        return "mid"
+    if field_name in {
+        "tax_id", "tax_id_type", "patient_acct", "accept_assign", "total_charge",
+        "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
+        "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
+        "facility_npi", "facility_other_id", "billing_name", "billing_address",
+        "billing_city_state_zip", "billing_phone", "billing_qualifier", "billing_npi",
+        "billing_other_id",
+    }:
+        return "bot"
+    return "top"
+
+
+def _aligned_xy(fd: dict, field_name: str, x: float, y: float):
+    alignment = fd.get("alignment_offsets", {}) if isinstance(fd, dict) else {}
+    section_offsets = alignment.get("section_offsets", {}) if isinstance(alignment, dict) else {}
+    field_offsets = alignment.get("field_offsets", {}) if isinstance(alignment, dict) else {}
+    section = _alignment_section_for_field(field_name)
+    sec_x, sec_y = section_offsets.get(section, [0, 0])
+    fld_x, fld_y = field_offsets.get(field_name, [0, 0])
+    return x + sec_x + fld_x, y + sec_y + fld_y
+
+
 def _draw_form_on_sample_background(c, fd):
     """Draw values over the bundled CMS sample image background."""
     sample_image = ASSETS_DIR / "cms1500_sample.png"
@@ -108,15 +144,16 @@ def _draw_form_on_sample_background(c, fd):
     c.drawImage(bg, 0, 0, width=W, height=H, preserveAspectRatio=False, mask="auto")
     c.setFillColorRGB(0, 0, 0)
 
-    def draw_field(name, x, y, size=8):
+    def draw_field(name, x, y, size=12):
         val = fd.get(name, "")
         if val is None:
             return
         text = str(val).strip()
         if not text:
             return
+        ax, ay = _aligned_xy(fd, name, x, y)
         c.setFont(FONT, size)
-        c.drawString(px_to_pt_x(x), px_to_pt_y(y), text)
+        c.drawString(px_to_pt_x(ax), px_to_pt_y(ay), text)
 
     field_positions = [
         ("ins_id", 760, 212),
@@ -208,7 +245,7 @@ def _draw_form_on_sample_background(c, fd):
         sl = service_lines[i] if i < len(service_lines) else {}
         if not sl:
             continue
-        c.setFont(FONT, 7)
+        c.setFont(FONT, 12)
         for key, x in [
             ("from_date", 47),
             ("to_date", 162),
@@ -225,7 +262,9 @@ def _draw_form_on_sample_background(c, fd):
         ]:
             txt = str(sl.get(key, "") or "").strip()
             if txt:
-                c.drawString(px_to_pt_x(x), px_to_pt_y(y), txt)
+                field_name = f"sl{i+1}_{key}"
+                ax, ay = _aligned_xy(fd, field_name, x, y)
+                c.drawString(px_to_pt_x(ax), px_to_pt_y(ay), txt)
 
     return True
 
