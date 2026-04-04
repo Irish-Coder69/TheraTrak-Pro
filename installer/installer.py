@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import winreg
 import json
 import ctypes
@@ -21,6 +22,42 @@ ICON_FILE = "Theratrak-Pro.ico"
 VERSION_FILE = "version.json"
 LEGACY_START_MENU_FOLDERS = ("Thorough Track Pro", "TheraTrak-Pro")
 LEGACY_ROOT_SHORTCUTS = ("TheraTrak Pro.lnk", "Uninstall TheraTrak Pro.lnk")
+
+
+def _stop_running_app() -> None:
+    # Best-effort stop so install can replace locked binaries.
+    try:
+        subprocess.run(
+            ["taskkill", "/IM", APP_EXE, "/F"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except OSError:
+        pass
+
+
+def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
+    for attempt in range(1, attempts + 1):
+        try:
+            if src.is_dir():
+                if dst.exists():
+                    shutil.rmtree(dst, ignore_errors=True)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+            return
+        except PermissionError:
+            if attempt >= attempts:
+                raise
+            _stop_running_app()
+            time.sleep(0.75)
+        except OSError:
+            if attempt >= attempts:
+                raise
+            _stop_running_app()
+            time.sleep(0.75)
 
 
 def bundled_dir() -> Path:
@@ -205,22 +242,18 @@ def main() -> int:
     source = bundled_dir()
     target = install_dir()
     target.mkdir(parents=True, exist_ok=True)
+    _stop_running_app()
 
     app_bundle = source / APP_BUNDLE_DIR
     if app_bundle.exists() and app_bundle.is_dir():
         for item in app_bundle.iterdir():
             destination = target / item.name
-            if item.is_dir():
-                if destination.exists():
-                    shutil.rmtree(destination, ignore_errors=True)
-                shutil.copytree(item, destination)
-            else:
-                shutil.copy2(item, destination)
+            _copy_with_retries(item, destination)
 
     for name in (UNINSTALL_EXE, ICON_FILE, VERSION_FILE):
         src = source / name
         if src.exists():
-            shutil.copy2(src, target / name)
+            _copy_with_retries(src, target / name)
 
     exe_path = target / APP_EXE
     uninstaller_path = target / UNINSTALL_EXE
