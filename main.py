@@ -1588,6 +1588,13 @@ class BillingTab(ttk.Frame):
 class CMS1500Tab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
+        self._overlay_offsets = {
+            "top": [1, 3],
+            "mid": [1, 3],
+            "dx": [1, 2],
+            "line": [1, 2],
+            "bot": [1, 2],
+        }
         self._build()
 
     def _build(self):
@@ -1641,6 +1648,29 @@ class CMS1500Tab(ttk.Frame):
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
         btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
+
+        # Live alignment controls for interactive box placement.
+        align = ttk.Frame(right, padding=(4, 0, 4, 4))
+        align.pack(fill="x", before=self._form_canvas)
+        ttk.Label(align, text="Align Section:").pack(side="left", padx=(0, 4))
+        self._align_section = tk.StringVar(value="top")
+        ttk.Combobox(
+            align,
+            textvariable=self._align_section,
+            values=["top", "mid", "dx", "line", "bot"],
+            state="readonly",
+            width=8,
+        ).pack(side="left")
+        ttk.Label(align, text="Nudge:").pack(side="left", padx=(10, 4))
+        btn(align, "←", lambda: self._nudge_overlay(-1, 0)).pack(side="left", padx=1)
+        btn(align, "↑", lambda: self._nudge_overlay(0, -1)).pack(side="left", padx=1)
+        btn(align, "↓", lambda: self._nudge_overlay(0, 1)).pack(side="left", padx=1)
+        btn(align, "→", lambda: self._nudge_overlay(1, 0)).pack(side="left", padx=1)
+        btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
+        self._align_status = ttk.Label(align, text="")
+        self._align_status.pack(side="left", padx=(10, 0))
+        self._align_section.trace_add("write", lambda *a: self._update_align_status())
+        self._update_align_status()
 
         self._refresh_claims()
 
@@ -1702,11 +1732,11 @@ class CMS1500Tab(ttk.Frame):
         mini_height = max(14, sy(18))
         entry_border = "#1f2937"
         # Section-specific nudges tuned against the current sample form scan.
-        top_x_nudge, top_y_nudge = 1, 3
-        mid_x_nudge, mid_y_nudge = 1, 3
-        dx_x_nudge, dx_y_nudge = 1, 2
-        line_x_nudge, line_y_nudge = 1, 2
-        bot_x_nudge, bot_y_nudge = 1, 2
+        top_x_nudge, top_y_nudge = self._overlay_offsets.get("top", [1, 3])
+        mid_x_nudge, mid_y_nudge = self._overlay_offsets.get("mid", [1, 3])
+        dx_x_nudge, dx_y_nudge = self._overlay_offsets.get("dx", [1, 2])
+        line_x_nudge, line_y_nudge = self._overlay_offsets.get("line", [1, 2])
+        bot_x_nudge, bot_y_nudge = self._overlay_offsets.get("bot", [1, 2])
 
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             widget = tk.Entry(
@@ -1923,6 +1953,53 @@ class CMS1500Tab(ttk.Frame):
                 self._cv[key].set(code)
                 return
         self._cv["dx12"].set(code)
+
+    def _nudge_overlay(self, dx, dy):
+        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
+        if section not in self._overlay_offsets:
+            section = "top"
+        self._overlay_offsets[section][0] += dx
+        self._overlay_offsets[section][1] += dy
+        self._update_align_status()
+        self._rebuild_form_preserve_values()
+
+    def _reset_overlay_section(self):
+        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
+        defaults = {
+            "top": [1, 3],
+            "mid": [1, 3],
+            "dx": [1, 2],
+            "line": [1, 2],
+            "bot": [1, 2],
+        }
+        self._overlay_offsets[section] = defaults.get(section, [1, 3]).copy()
+        self._update_align_status()
+        self._rebuild_form_preserve_values()
+
+    def _update_align_status(self):
+        if not hasattr(self, "_align_status"):
+            return
+        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
+        if section not in self._overlay_offsets:
+            section = "top"
+        x_off, y_off = self._overlay_offsets[section]
+        self._align_status.config(text=f"{section}: x={x_off}, y={y_off}")
+
+    def _rebuild_form_preserve_values(self):
+        existing = self._collect_form_data() if hasattr(self, "_cv") else {}
+        for child in self._form_frame.winfo_children():
+            child.destroy()
+        self._build_form(self._form_frame)
+        if not existing:
+            return
+        for key, var in self._cv.items():
+            if key in existing:
+                var.set(str(existing[key]) if existing[key] is not None else "")
+        sls = existing.get("service_lines", [])
+        for i, sl_vars in enumerate(self._sl_vars):
+            sl = sls[i] if i < len(sls) else {}
+            for key, var in sl_vars.items():
+                var.set(str(sl.get(key, "")) if sl.get(key) is not None else "")
 
     def load_from_session(self, pid, sessions):
         """Pre-populate form from patient + sessions."""
