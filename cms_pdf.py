@@ -96,7 +96,7 @@ def _alignment_section_for_field(field_name: str) -> str:
     }:
         return "mid"
     if field_name in {
-        "tax_id", "tax_id_type", "patient_acct", "accept_assign", "total_charge",
+        "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "total_charge",
         "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
         "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
         "facility_npi", "facility_other_id", "billing_name", "billing_address",
@@ -220,7 +220,7 @@ def _draw_form_on_sample_background(c, fd):
         ("original_ref_no", 936, 974),
         ("auth_number", 760, 994),
         ("tax_id", 38, 1365),
-        ("tax_id_type", 223, 1365),
+        ("tax_id_ein", 223, 1365),
         ("patient_acct", 381, 1365),
         ("accept_assign", 605, 1365),
         ("total_charge", 774, 1365),
@@ -231,7 +231,7 @@ def _draw_form_on_sample_background(c, fd):
         ("facility_name", 378, 1425),
         ("facility_address", 378, 1460),
         ("facility_city_state_zip", 378, 1492),
-        ("facility_qualifier", 472, 1501),
+        ("tax_id_ssn", 472, 1501),
         ("facility_npi", 496, 1501),
         ("facility_other_id", 661, 1501),
         ("billing_name", 771, 1425),
@@ -600,7 +600,8 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "dx4":            g(patient, "dx4"),
         "service_lines":  service_lines,
         "tax_id":         g(provider, "tax_id"),
-        "tax_id_type":    g(provider, "tax_id_type", "EIN"),
+        "tax_id_ein":     "X" if g(provider, "tax_id_type", "EIN") == "EIN" else "",
+        "tax_id_ssn":     "X" if g(provider, "tax_id_type", "EIN") == "SSN" else "",
         "patient_acct":   str(g(patient, "id")),
         "accept_assign":  g(provider, "accept_assign", 1),
         "total_charge":   total_charge,

@@ -207,8 +207,12 @@ class UserDirectoryDialog(tk.Toplevel):
         super().__init__(parent)
         apply_window_icon(self)
         self.title("User Directory")
-        self.geometry("860x430")
+        self.geometry("1150x540")
         self.resizable(True, True)
+        self._edit_uid = None
+        self._rows = []
+        self._vars = {}
+        self._active_var = tk.BooleanVar(value=True)
         self._build()
         self._load_users()
         self.grab_set()
@@ -217,6 +221,7 @@ class UserDirectoryDialog(tk.Toplevel):
         container = ttk.Frame(self, padding=8)
         container.pack(fill="both", expand=True)
 
+        # ── Left: treeview ───────────────────────────────────────────────────
         left = ttk.Frame(container)
         left.pack(side="left", fill="both", expand=True)
 
@@ -238,17 +243,75 @@ class UserDirectoryDialog(tk.Toplevel):
         self.tv.configure(yscrollcommand=vsb.set)
         self.tv.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
-        self.tv.bind("<<TreeviewSelect>>", self._show_details)
+        self.tv.bind("<<TreeviewSelect>>", self._on_select)
 
-        right = lframe(container, "Selected User Details")
-        right.pack(side="left", fill="y", padx=(8, 0))
-        self.details = tk.Text(right, width=34, height=20, font=FONT_MONO, state="disabled")
-        self.details.pack(fill="both", expand=True)
+        # ── Right: edit form ─────────────────────────────────────────────────
+        right_outer = lframe(container, "Edit User")
+        right_outer.pack(side="left", fill="y", padx=(8, 0))
 
+        scroll_canvas = tk.Canvas(right_outer, width=400, background=BG, highlightthickness=0)
+        vsb2 = ttk.Scrollbar(right_outer, orient="vertical", command=scroll_canvas.yview)
+        scroll_canvas.configure(yscrollcommand=vsb2.set)
+        scroll_canvas.pack(side="left", fill="both", expand=True)
+        vsb2.pack(side="right", fill="y")
+
+        form = ttk.Frame(scroll_canvas)
+        fid = scroll_canvas.create_window((0, 0), window=form, anchor="nw")
+        form.bind("<Configure>", lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all")))
+        scroll_canvas.bind("<Configure>", lambda e: scroll_canvas.itemconfigure(fid, width=e.width))
+
+        def fv(name):
+            v = tk.StringVar()
+            self._vars[name] = v
+            return v
+
+        def fe(lbl, name, r, width=28):
+            ttk.Label(form, text=lbl).grid(row=r, column=0, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(name), width=width).grid(row=r, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
+
+        def fe2(lbl1, n1, lbl2, n2, r, w1=12, w2=12):
+            ttk.Label(form, text=lbl1).grid(row=r, column=0, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(n1), width=w1).grid(row=r, column=1, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Label(form, text=lbl2).grid(row=r, column=2, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(n2), width=w2).grid(row=r, column=3, sticky="ew", padx=(0, 4), pady=3)
+
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(3, weight=1)
+
+        fe("Username:", "username", 0)
+        fe2("First Name:", "first_name", "Last Name:", "last_name", 1)
+        fe2("Middle Name:", "middle_name", "Suffix:", "suffix", 2, w1=14, w2=6)
+        fe("Email:", "email", 3)
+        fe("Phone:", "phone", 4)
+        ttk.Label(form, text="Role:").grid(row=5, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Combobox(
+            form, textvariable=fv("role"),
+            values=["Admin", "User", "Provider", "Billing", "Read-Only"],
+            state="readonly", width=26,
+        ).grid(row=5, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
+        fe("License #:", "license_number", 6)
+        fe("NPI #:", "npi_number", 7)
+        fe("Address:", "address", 8)
+        fe2("City:", "city", "State:", "state", 9, w1=16, w2=5)
+        fe("Zip:", "zip", 10)
+
+        ttk.Separator(form, orient="horizontal").grid(row=11, column=0, columnspan=4, sticky="ew", pady=6)
+
+        ttk.Label(form, text="New Password:").grid(row=12, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(form, textvariable=fv("password"), width=28, show="*").grid(row=12, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
+        ttk.Label(form, text="(leave blank to keep current)", font=("Arial", 8)).grid(row=13, column=1, columnspan=3, sticky="w")
+
+        ttk.Checkbutton(form, text="Active", variable=self._active_var).grid(
+            row=14, column=0, columnspan=2, sticky="w", padx=4, pady=(10, 4)
+        )
+
+        # ── Bottom buttons ───────────────────────────────────────────────────
         bottom = ttk.Frame(self, padding=8)
         bottom.pack(fill="x")
+        btn(bottom, "+ Add User", self._add_user).pack(side="left", padx=(0, 4))
         btn(bottom, "Refresh", self._load_users).pack(side="left")
-        btn(bottom, "Close", self.destroy).pack(side="right")
+        btn(bottom, "Save Changes", self._save_changes, "Accent.TButton").pack(side="right")
+        btn(bottom, "Close", self.destroy).pack(side="right", padx=(0, 4))
 
     def _load_users(self):
         self._rows = db.get_all_users()
@@ -256,21 +319,12 @@ class UserDirectoryDialog(tk.Toplevel):
         for r in self._rows:
             name = f"{r['first_name']} {r['last_name']}"
             self.tv.insert(
-                "",
-                "end",
-                iid=str(r["id"]),
-                values=(
-                    r["id"],
-                    r["username"],
-                    name,
-                    r["role"],
-                    r["email"],
-                    r["phone"],
-                    "Yes" if r["is_active"] else "No",
-                ),
+                "", "end", iid=str(r["id"]),
+                values=(r["id"], r["username"], name, r["role"],
+                        r["email"], r["phone"], "Yes" if r["is_active"] else "No"),
             )
 
-    def _show_details(self, event=None):
+    def _on_select(self, event=None):
         sel = self.tv.selection()
         if not sel:
             return
@@ -278,23 +332,32 @@ class UserDirectoryDialog(tk.Toplevel):
         row = next((r for r in self._rows if r["id"] == uid), None)
         if not row:
             return
-        lines = [
-            f"ID: {row['id']}",
-            f"Username: {row['username']}",
-            f"Name: {row['first_name']} {row['last_name']}",
-            f"Role: {row['role']}",
-            f"Email: {row['email']}",
-            f"Phone: {row['phone']}",
-            f"Address: {row['address']}",
-            f"City/State/Zip: {row['city']} {row['state']} {row['zip']}",
-            f"Active: {'Yes' if row['is_active'] else 'No'}",
-            f"Created: {row['created_at']}",
-            f"Last Login: {row['last_login'] or 'Never'}",
-        ]
-        self.details.config(state="normal")
-        self.details.delete("1.0", "end")
-        self.details.insert("1.0", "\n".join(lines))
-        self.details.config(state="disabled")
+        self._edit_uid = uid
+        for key in ("username", "first_name", "middle_name", "last_name", "suffix",
+                    "email", "phone", "role", "license_number", "npi_number",
+                    "address", "city", "state", "zip"):
+            self._vars[key].set(str(row[key] or ""))
+        self._vars["password"].set("")
+        self._active_var.set(bool(row["is_active"]))
+
+    def _save_changes(self):
+        if self._edit_uid is None:
+            messagebox.showinfo("Select", "Please select a user to edit.", parent=self)
+            return
+        data = {k: v.get().strip() for k, v in self._vars.items()}
+        data["is_active"] = int(self._active_var.get())
+        try:
+            db.update_user(self._edit_uid, data)
+        except ValueError as e:
+            messagebox.showerror("Validation Error", str(e), parent=self)
+            return
+        messagebox.showinfo("Saved", "User updated successfully.", parent=self)
+        self._vars["password"].set("")
+        self._load_users()
+
+    def _add_user(self):
+        CreateAccountDialog(self)
+        self.after(600, self._load_users)
 
 
 class CreateAccountDialog(tk.Toplevel):
@@ -1663,6 +1726,7 @@ class CMS1500Tab(ttk.Frame):
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
         btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
+        btn(act, "Save Alignment JSON",         self._export_alignment_offsets).pack(side="left", padx=4)
 
         # Live alignment controls for interactive box placement.
         align = ttk.Frame(right, padding=(4, 0, 4, 4))
@@ -2037,18 +2101,18 @@ class CMS1500Tab(ttk.Frame):
 
         # Bottom / provider area
         add_bottom_entry("tax_id", 38, 1361, 116)
-        add_bottom_entry("tax_id_type", 223, 1361, 44, justify="center")
+        add_bottom_entry("tax_id_ein", 223, 1361, 24, height=mini_height, justify="center")
+        add_bottom_entry("tax_id_ssn", 472, 1497, 24, height=mini_height, justify="center")
         add_bottom_entry("patient_acct", 381, 1361, 160)
         add_bottom_entry("accept_assign", 605, 1361, 84, justify="center")
-        add_bottom_entry("total_charge", 774, 1361, 116, justify="right")
-        add_bottom_entry("amount_paid", 928, 1361, 98, justify="right")
+        add_bottom_entry("total_charge", 774, 1361, 116, justify="center")
+        add_bottom_entry("amount_paid", 928, 1361, 98, justify="center")
         add_bottom_entry("provider_sig", 38, 1421, 250)
         add_bottom_entry("provider_sig_date", 294, 1421, 66, justify="center")
         add_bottom_entry("billing_date", 271, 1497, 88, justify="center")
         add_bottom_entry("facility_name", 378, 1421, 268)
         add_bottom_entry("facility_address", 378, 1456, 268)
         add_bottom_entry("facility_city_state_zip", 378, 1488, 268)
-        add_bottom_entry("facility_qualifier", 472, 1497, 24, justify="center")
         add_bottom_entry("facility_npi", 496, 1497, 148, justify="center")
         add_bottom_entry("facility_other_id", 661, 1497, 148, justify="center")
         add_bottom_entry("billing_name", 771, 1421, 270)
@@ -2395,7 +2459,7 @@ class CMS1500Tab(ttk.Frame):
         }:
             return "mid"
         if field_name in {
-            "tax_id", "tax_id_type", "patient_acct", "accept_assign", "total_charge",
+            "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "total_charge",
             "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
             "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
             "facility_npi", "facility_other_id", "billing_name", "billing_address",
@@ -2590,7 +2654,7 @@ class CMS1500Tab(ttk.Frame):
             ("original_ref_no", 936, 974),
             ("auth_number", 760, 994),
             ("tax_id", 38, 1365),
-            ("tax_id_type", 223, 1365),
+            ("tax_id_ein", 223, 1365),
             ("patient_acct", 381, 1365),
             ("accept_assign", 605, 1365),
             ("total_charge", 774, 1365),
@@ -2601,7 +2665,7 @@ class CMS1500Tab(ttk.Frame):
             ("facility_name", 378, 1425),
             ("facility_address", 378, 1460),
             ("facility_city_state_zip", 378, 1492),
-            ("facility_qualifier", 472, 1501),
+            ("tax_id_ssn", 472, 1501),
             ("facility_npi", 496, 1501),
             ("facility_other_id", 661, 1501),
             ("billing_name", 771, 1425),

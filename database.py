@@ -658,3 +658,43 @@ def get_all_users():
     ).fetchall()
     conn.close()
     return rows
+
+
+def update_user(uid: int, data: dict):
+    """Update an existing user's profile fields. If 'password' is non-empty, reset the password hash."""
+    profile_fields = [
+        "first_name", "middle_name", "last_name", "suffix",
+        "email", "phone", "role",
+        "address", "city", "state", "zip",
+        "license_number", "npi_number",
+        "billing_address", "billing_city", "billing_state", "billing_zip",
+        "is_active",
+    ]
+    params = []
+    for f in profile_fields:
+        val = data.get(f)
+        if f == "is_active":
+            params.append(int(bool(val)))
+        else:
+            params.append((str(val).strip() if val is not None else ""))
+    set_clause = ", ".join(f"{f}=?" for f in profile_fields)
+    params.append(uid)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE users SET {set_clause} WHERE id=?", params)
+
+    new_pw = (data.get("password") or "").strip()
+    if new_pw:
+        if len(new_pw) < 8:
+            conn.close()
+            raise ValueError("Password must be at least 8 characters.")
+        salt_hex = _new_salt_hex()
+        pw_hash = _hash_password(new_pw, salt_hex)
+        cur.execute(
+            "UPDATE users SET password_hash=?, password_salt=? WHERE id=?",
+            (pw_hash, salt_hex, uid),
+        )
+
+    conn.commit()
+    conn.close()
