@@ -253,9 +253,9 @@ class UserDirectoryDialog(tk.Toplevel):
 
         # ── Right: edit form ─────────────────────────────────────────────────
         right_outer = lframe(container, "Edit User")
-        right_outer.pack(side="left", fill="y", padx=(8, 0))
+        right_outer.pack(side="left", fill="both", expand=True, padx=(8, 0))
 
-        scroll_canvas = tk.Canvas(right_outer, width=400, background=BG, highlightthickness=0)
+        scroll_canvas = tk.Canvas(right_outer, background=BG, highlightthickness=0)
         vsb2 = ttk.Scrollbar(right_outer, orient="vertical", command=scroll_canvas.yview)
         scroll_canvas.configure(yscrollcommand=vsb2.set)
         scroll_canvas.pack(side="left", fill="both", expand=True)
@@ -271,44 +271,84 @@ class UserDirectoryDialog(tk.Toplevel):
             self._vars[name] = v
             return v
 
-        def fe(lbl, name, r, width=28):
+        # Full-width entry (spans all 6 data columns)
+        def fe(lbl, name, r):
             ttk.Label(form, text=lbl).grid(row=r, column=0, sticky="e", padx=(4, 2), pady=3)
-            ttk.Entry(form, textvariable=fv(name), width=width).grid(row=r, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Entry(form, textvariable=fv(name)).grid(row=r, column=1, columnspan=5, sticky="ew", padx=(0, 8), pady=3)
 
-        def fe2(lbl1, n1, lbl2, n2, r, w1=12, w2=12):
+        # Two-field row  (label | entry | label | entry)
+        def fe2(lbl1, n1, lbl2, n2, r):
             ttk.Label(form, text=lbl1).grid(row=r, column=0, sticky="e", padx=(4, 2), pady=3)
-            ttk.Entry(form, textvariable=fv(n1), width=w1).grid(row=r, column=1, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Entry(form, textvariable=fv(n1)).grid(row=r, column=1, sticky="ew", padx=(0, 4), pady=3)
             ttk.Label(form, text=lbl2).grid(row=r, column=2, sticky="e", padx=(4, 2), pady=3)
-            ttk.Entry(form, textvariable=fv(n2), width=w2).grid(row=r, column=3, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Entry(form, textvariable=fv(n2)).grid(row=r, column=3, sticky="ew", padx=(0, 8), pady=3)
 
-        form.columnconfigure(1, weight=1)
-        form.columnconfigure(3, weight=1)
+        # Three-field row (label | entry | label | entry | label | entry)
+        def fe3(lbl1, n1, lbl2, n2, lbl3, n3, r):
+            ttk.Label(form, text=lbl1).grid(row=r, column=0, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(n1)).grid(row=r, column=1, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Label(form, text=lbl2).grid(row=r, column=2, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(n2)).grid(row=r, column=3, sticky="ew", padx=(0, 4), pady=3)
+            ttk.Label(form, text=lbl3).grid(row=r, column=4, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(form, textvariable=fv(n3)).grid(row=r, column=5, sticky="ew", padx=(0, 8), pady=3)
 
-        fe("Username:", "username", 0)
-        fe2("First Name:", "first_name", "Last Name:", "last_name", 1)
-        fe2("Middle Name:", "middle_name", "Suffix:", "suffix", 2, w1=14, w2=6)
-        fe("Email:", "email", 3)
-        fe("Phone:", "phone", 4)
-        ttk.Label(form, text="Role:").grid(row=5, column=0, sticky="e", padx=(4, 2), pady=3)
+        for c in (1, 3, 5):
+            form.columnconfigure(c, weight=1)
+
+        # ── Read-only info row
+        info_frm = ttk.Frame(form)
+        info_frm.grid(row=0, column=0, columnspan=6, sticky="ew", padx=4, pady=(4, 2))
+        self._info_id    = ttk.Label(info_frm, text="ID: —",          foreground="#888")
+        self._info_cr    = ttk.Label(info_frm, text="Created: —",     foreground="#888")
+        self._info_login = ttk.Label(info_frm, text="Last Login: —",  foreground="#888")
+        self._info_id.pack(side="left", padx=(0, 14))
+        self._info_cr.pack(side="left", padx=(0, 14))
+        self._info_login.pack(side="left")
+
+        ttk.Separator(form, orient="horizontal").grid(row=1, column=0, columnspan=6, sticky="ew", pady=(2, 6))
+
+        # ── Identity
+        fe("Username:", "username", 2)
+        fe2("First Name:", "first_name", "Last Name:", "last_name", 3)
+        fe3("Middle Name:", "middle_name", "Suffix:", "suffix", "Role:", "role_unused", 4)
+        # Replace the placeholder entry for Role with a proper Combobox
+        for w in form.grid_slaves(row=4, column=5):
+            w.destroy()
         ttk.Combobox(
             form, textvariable=fv("role"),
             values=["Admin", "User", "Provider", "Billing", "Read-Only"],
-            state="readonly", width=26,
-        ).grid(row=5, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
-        fe("License #:", "license_number", 6)
-        fe("NPI #:", "npi_number", 7)
-        fe("Address:", "address", 8)
-        fe2("City:", "city", "State:", "state", 9, w1=16, w2=5)
-        fe("Zip:", "zip", 10)
+            state="readonly",
+        ).grid(row=4, column=5, sticky="ew", padx=(0, 8), pady=3)
 
-        ttk.Separator(form, orient="horizontal").grid(row=11, column=0, columnspan=4, sticky="ew", pady=6)
+        ttk.Separator(form, orient="horizontal").grid(row=5, column=0, columnspan=6, sticky="ew", pady=6)
 
-        ttk.Label(form, text="New Password:").grid(row=12, column=0, sticky="e", padx=(4, 2), pady=3)
-        ttk.Entry(form, textvariable=fv("password"), width=28, show="*").grid(row=12, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
-        ttk.Label(form, text="(leave blank to keep current)", font=("Arial", 8)).grid(row=13, column=1, columnspan=3, sticky="w")
+        # ── Contact
+        fe2("Email:", "email", "Phone:", "phone", 6)
+        fe2("License #:", "license_number", "NPI #:", "npi_number", 7)
+
+        ttk.Separator(form, orient="horizontal").grid(row=8, column=0, columnspan=6, sticky="ew", pady=6)
+
+        # ── Primary address
+        ttk.Label(form, text="Address:", font=("Arial", 9, "bold")).grid(row=9, column=0, columnspan=6, sticky="w", padx=4, pady=(2, 0))
+        fe("Street:", "address", 10)
+        fe3("City:", "city", "State:", "state", "Zip:", "zip", 11)
+
+        ttk.Separator(form, orient="horizontal").grid(row=12, column=0, columnspan=6, sticky="ew", pady=6)
+
+        # ── Billing address
+        ttk.Label(form, text="Billing Address:", font=("Arial", 9, "bold")).grid(row=13, column=0, columnspan=6, sticky="w", padx=4, pady=(2, 0))
+        fe("Street:", "billing_address", 14)
+        fe3("City:", "billing_city", "State:", "billing_state", "Zip:", "billing_zip", 15)
+
+        ttk.Separator(form, orient="horizontal").grid(row=16, column=0, columnspan=6, sticky="ew", pady=6)
+
+        # ── Password & active
+        ttk.Label(form, text="New Password:").grid(row=17, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(form, textvariable=fv("password"), show="*").grid(row=17, column=1, columnspan=3, sticky="ew", padx=(0, 4), pady=3)
+        ttk.Label(form, text="(leave blank to keep current)", foreground="#888").grid(row=17, column=4, columnspan=2, sticky="w", padx=(0, 8))
 
         ttk.Checkbutton(form, text="Active", variable=self._active_var).grid(
-            row=14, column=0, columnspan=2, sticky="w", padx=4, pady=(10, 4)
+            row=18, column=0, columnspan=2, sticky="w", padx=4, pady=(8, 4)
         )
 
         # ── Bottom buttons ───────────────────────────────────────────────────
@@ -341,10 +381,14 @@ class UserDirectoryDialog(tk.Toplevel):
         self._edit_uid = uid
         for key in ("username", "first_name", "middle_name", "last_name", "suffix",
                     "email", "phone", "role", "license_number", "npi_number",
-                    "address", "city", "state", "zip"):
+                    "address", "city", "state", "zip",
+                    "billing_address", "billing_city", "billing_state", "billing_zip"):
             self._vars[key].set(str(row[key] or ""))
         self._vars["password"].set("")
         self._active_var.set(bool(row["is_active"]))
+        self._info_id.config(text=f"ID: {row['id']}")
+        self._info_cr.config(text=f"Created: {row['created_at'] or '—'}")
+        self._info_login.config(text=f"Last Login: {row['last_login'] or 'Never'}")
 
     def _save_changes(self):
         if self._edit_uid is None:
