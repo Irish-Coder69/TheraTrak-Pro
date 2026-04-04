@@ -1701,6 +1701,11 @@ class CMS1500Tab(ttk.Frame):
         field_height = max(18, sy(24))
         mini_height = max(14, sy(18))
         entry_border = "#1f2937"
+        # Global alignment nudges for the scanned form background.
+        field_x_nudge = 0
+        field_y_nudge = 4
+        line_x_nudge = 0
+        line_y_nudge = 2
 
         def add_entry(name, x, y, width, *, height=None, justify="left"):
             widget = tk.Entry(
@@ -1718,8 +1723,8 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             surface.create_window(
-                sx(x),
-                sy(y),
+                sx(x + field_x_nudge),
+                sy(y + field_y_nudge),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
@@ -1745,8 +1750,8 @@ class CMS1500Tab(ttk.Frame):
                 justify=justify,
             )
             surface.create_window(
-                sx(x),
-                sy(y),
+                sx(x + line_x_nudge),
+                sy(y + line_y_nudge),
                 window=widget,
                 anchor="nw",
                 width=sx(width),
