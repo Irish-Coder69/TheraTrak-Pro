@@ -352,6 +352,9 @@ def cms_form_data_from_patient(patient, sessions, provider):
 
     pt_name = f"{g(patient,'last_name')}, {g(patient,'first_name')}"
     ins_holder = g(patient, "ins_holder") or pt_name
+    patient_phone = g(patient, "phone_home") or g(patient, "phone_cell") or g(patient, "phone_work")
+    facility_city_state_zip = f"{g(provider,'city')} {g(provider,'state')} {g(provider,'zip')}".strip()
+    billing_city_state_zip = facility_city_state_zip
 
     fd = {
         "ins_type":       "",
@@ -364,15 +367,25 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "patient_city":   g(patient, "city"),
         "patient_state":  g(patient, "state"),
         "patient_zip":    g(patient, "zip"),
+        "patient_phone":  patient_phone,
         "ins_relation":   g(patient, "ins_relation", "Self"),
         "ins_address2":   g(patient, "ins_address"),
         "ins_city2":      g(patient, "ins_city"),
         "ins_state2":     g(patient, "ins_state"),
         "ins_zip2":       g(patient, "ins_zip"),
+        "ins_phone":      g(patient, "ins_phone"),
         "ins_group":      g(patient, "ins_group"),
+        "other_ins_name": g(patient, "other_ins_name"),
+        "other_ins_policy": g(patient, "other_ins_policy"),
+        "ins_dob":        g(patient, "ins_dob"),
+        "ins_sex":        g(patient, "ins_sex"),
+        "other_claim_id": g(patient, "other_claim_id"),
+        "other_plan":     g(patient, "other_plan"),
         "patient_sig":    "Signature on File",
+        "patient_sig_date": date.today().strftime("%m %d %y"),
         "ins_sig":        "Signature on File",
         "ref_provider":   g(patient, "referring_name"),
+        "ref_qual":       "",
         "ref_npi":        g(patient, "referring_npi"),
         "dx1":            g(patient, "dx1"),
         "dx2":            g(patient, "dx2"),
@@ -380,14 +393,21 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "dx4":            g(patient, "dx4"),
         "service_lines":  service_lines,
         "tax_id":         g(provider, "tax_id"),
+        "tax_id_type":    g(provider, "tax_id_type", "EIN"),
         "patient_acct":   str(g(patient, "id")),
         "accept_assign":  g(provider, "accept_assign", 1),
         "total_charge":   total_charge,
         "amount_paid":    0.0,
         "provider_sig":   "Signature on File",
         "billing_date":   date.today().strftime("%m/%d/%Y"),
+        "facility_name":  g(provider, "practice_name") or f"{g(provider,'provider_first')} {g(provider,'provider_last')}".strip(),
+        "facility_address": g(provider, "address"),
+        "facility_city_state_zip": facility_city_state_zip,
+        "facility_npi":   g(provider, "npi"),
         "billing_name":   f"{g(provider,'practice_name') or g(provider,'provider_last')+', '+g(provider,'provider_first')}",
         "billing_address":g(provider, "address"),
+        "billing_city_state_zip": billing_city_state_zip,
+        "billing_phone":  g(provider, "phone"),
         "billing_npi":    g(provider, "npi"),
     }
     return fd

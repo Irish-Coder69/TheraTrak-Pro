@@ -29,7 +29,7 @@ except ImportError:
 
 import database as db
 import version_manager as vm
-from app_paths import APP_ROOT, DB_FILE, ICON_FILE, VERSION_FILE
+from app_paths import APP_ROOT, ASSETS_DIR, DB_FILE, ICON_FILE, VERSION_FILE
 
 # ─── Colour / Style constants ──────────────────────────────────────────────────
 
@@ -1653,7 +1653,7 @@ class CMS1500Tab(ttk.Frame):
             self._cv[name] = v
             return v
 
-        sample_image = APP_ROOT / "assets" / "cms1500_sample.png"
+        sample_image = ASSETS_DIR / "cms1500_sample.png"
         if not sample_image.exists() or Image is None or ImageTk is None:
             ttk.Label(
                 parent,
@@ -1761,19 +1761,40 @@ class CMS1500Tab(ttk.Frame):
         add_entry("patient_zip", 40, 444, 158)
         add_entry("ins_city2", 760, 386, 318)
         add_entry("ins_state2", 1088, 386, 38, justify="center")
+        add_entry("patient_phone", 216, 444, 210, justify="center")
         add_entry("ins_zip2", 760, 444, 150)
         add_entry("ins_group", 760, 499, 368)
         add_entry("ins_plan", 760, 617, 368)
+        add_entry("ins_phone", 934, 444, 192, justify="center")
+        add_entry("other_ins_name", 40, 500, 386)
+        add_entry("other_ins_policy", 40, 556, 386)
+        add_entry("reserved_nucc_b", 40, 614, 386)
+        add_entry("reserved_nucc_c", 40, 672, 386)
         add_entry("patient_sig", 110, 738, 338)
+        add_entry("ins_dob", 816, 555, 178, justify="center")
+        add_entry("ins_sex", 1036, 555, 36, justify="center")
+        add_entry("other_claim_id", 760, 613, 368)
         add_entry("ins_sig", 787, 738, 300)
+        add_entry("other_plan", 40, 672, 386)
 
+        add_entry("patient_sig_date", 502, 738, 120, justify="center")
         # Mid form
         add_entry("illness_date", 38, 819, 148)
         add_entry("ref_provider", 38, 876, 370)
         add_entry("ref_npi", 459, 876, 58)
+        add_entry("illness_qual", 206, 819, 72, justify="center")
+        add_entry("other_date", 432, 819, 149, justify="center")
+        add_entry("other_date_qual", 600, 819, 63, justify="center")
+        add_entry("unable_from", 816, 819, 127, justify="center")
+        add_entry("unable_to", 997, 819, 128, justify="center")
         add_entry("add_info", 38, 935, 640)
+        add_entry("ref_qual", 421, 876, 38, justify="center")
         add_entry("auth_number", 760, 990, 368)
+        add_entry("hospital_from", 817, 876, 128, justify="center")
+        add_entry("hospital_to", 998, 876, 128, justify="center")
 
+        add_entry("outside_lab", 816, 935, 114, justify="center")
+        add_entry("outside_lab_charge", 972, 935, 152, justify="right")
         # Diagnosis box
         add_entry("dx1", 95, 973, 110)
         add_entry("dx2", 286, 973, 110)
@@ -1784,6 +1805,8 @@ class CMS1500Tab(ttk.Frame):
         add_entry("dx7", 477, 1003, 110)
         add_entry("dx8", 669, 1003, 110)
 
+        add_entry("resubmission_code", 816, 970, 108, justify="center")
+        add_entry("original_ref_no", 936, 970, 188)
         # Service lines
         line_y = [1046, 1103, 1160, 1217, 1274, 1331]
         for y in line_y:
@@ -1796,6 +1819,9 @@ class CMS1500Tab(ttk.Frame):
             add_service_entry(sl_row, "dx_ptr", 648, y, 60, justify="center")
             add_service_entry(sl_row, "charge", 769, y, 84, justify="right")
             add_service_entry(sl_row, "units", 872, y, 42, justify="center")
+            add_service_entry(sl_row, "epsdt", 919, y, 24, justify="center")
+            add_service_entry(sl_row, "family_plan", 946, y, 30, justify="center")
+            add_service_entry(sl_row, "id_qual", 979, y, 34, justify="center")
             add_service_entry(sl_row, "npi", 1000, y, 124, justify="center")
             self._sl_vars.append(sl_row)
 
@@ -1810,11 +1836,15 @@ class CMS1500Tab(ttk.Frame):
         add_entry("billing_date", 271, 1497, 88, justify="center")
         add_entry("facility_name", 378, 1421, 268)
         add_entry("facility_address", 378, 1456, 268)
+        add_entry("facility_city_state_zip", 378, 1488, 268)
         add_entry("facility_npi", 496, 1497, 148, justify="center")
+        add_entry("facility_other_id", 661, 1497, 148, justify="center")
         add_entry("billing_name", 771, 1421, 270)
         add_entry("billing_address", 771, 1456, 270)
+        add_entry("billing_city_state_zip", 771, 1488, 270)
         add_entry("billing_phone", 1000, 1361, 130, justify="center")
         add_entry("billing_npi", 780, 1497, 148, justify="center")
+        add_entry("billing_other_id", 947, 1497, 178, justify="center")
 
         lookup_btn = ttk.Button(
             parent,
