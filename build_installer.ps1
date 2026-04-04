@@ -2,7 +2,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$python = Join-Path $root '.venv\Scripts\python.exe'
+$python311 = Join-Path $root '.venv311\Scripts\python.exe'
+$python = if (Test-Path $python311) { $python311 } else { Join-Path $root '.venv\Scripts\python.exe' }
 $icon = Join-Path $root 'Theratrak-Pro.ico'
 $mainPy = Join-Path $root 'main.py'
 $installerPy = Join-Path $root 'installer\installer.py'
@@ -14,7 +15,13 @@ $releaseDir = Join-Path $root 'release'
 $installerExe = Join-Path $releaseDir 'TheraTrak-Pro-Installer.exe'
 
 if (-not (Test-Path $python)) {
-    throw 'Python virtual environment not found at .venv\Scripts\python.exe'
+    throw 'Python virtual environment not found. Create .venv311 (recommended) or .venv before building.'
+}
+
+$pyVersionRaw = & $python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+$pyVersion = [version]$pyVersionRaw
+if ($pyVersion.Major -eq 3 -and $pyVersion.Minor -ge 13) {
+    throw "Unsupported build Python version $pyVersionRaw. Use Python 3.11/3.12 for stable PyInstaller runtime."
 }
 
 Remove-Item $buildDir, $distDir, $releaseDir -Recurse -Force -ErrorAction SilentlyContinue
