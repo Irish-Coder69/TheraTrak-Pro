@@ -200,6 +200,7 @@ def write_uninstall_registry(target: Path, uninstall_cmd: Path, version: str) ->
 def main() -> int:
     root = Tk()
     root.withdraw()
+    root.attributes("-topmost", True)   # ensure all dialogs appear in front
 
     source = bundled_dir()
     target = install_dir()

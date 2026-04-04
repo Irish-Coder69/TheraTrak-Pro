@@ -2692,45 +2692,48 @@ class TheraTrakApp(tk.Tk):
             progress_win.destroy()
 
     def _launch_installer_after_exit(self, installer_path):
-        app_exe = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "TheraTrak Pro" / "TheraTrak Pro.exe"
+        install_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "TheraTrak Pro"
+        app_exe = install_dir / "TheraTrak Pro.exe"
         if not app_exe.exists() and getattr(sys, "frozen", False):
             app_exe = Path(sys.executable)
         updater_bat = UPDATE_TEMP_DIR / "run_theratrak_update.bat"
-        app_name = "TheraTrak Pro.exe"
+        log_file = Path(os.environ.get("TEMP", str(Path.home()))) / "theratrak_update.log"
         app_pid = os.getpid()
 
         lines = [
             "@echo off",
             "setlocal",
-            f"set \"INSTALLER={installer_path}\"",
-            f"set \"APP_NAME={app_name}\"",
-            f"set \"APP_PID={app_pid}\"",
-            f"set \"APP_EXE={app_exe}\"",
-            ":wait_close",
-            "tasklist /FI \"PID eq %APP_PID%\" | find \"%APP_PID%\" >nul",
-            "if not errorlevel 1 (",
-            "  ping 127.0.0.1 -n 2 >nul",
-            "  goto wait_close",
-            ")",
-            "start \"\" /wait \"%INSTALLER%\"",
-            "if not \"%APP_EXE%\"==\"\" if exist \"%APP_EXE%\" start \"\" \"%APP_EXE%\"",
+            f'set "INSTALLER={installer_path}"',
+            f'set "APP_PID={app_pid}"',
+            f'set "APP_EXE={app_exe}"',
+            f'set "LOG={log_file}"',
+            'echo [%date% %time%] Updater started > "%LOG%"',
+            ':wait_close',
+            'tasklist /FI "PID eq %APP_PID%" 2>nul | find "%APP_PID%" >nul',
+            'if not errorlevel 1 (',
+            '  ping 127.0.0.1 -n 2 >nul',
+            '  goto wait_close',
+            ')',
+            'echo [%date% %time%] App exited, launching installer >> "%LOG%"',
+            'start "" /wait "%INSTALLER%"',
+            'echo [%date% %time%] Installer finished, errorlevel=%ERRORLEVEL% >> "%LOG%"',
+            'if not "%APP_EXE%"=="" if exist "%APP_EXE%" (',
+            '  echo [%date% %time%] Relaunching app: %APP_EXE% >> "%LOG%"',
+            '  start "" "%APP_EXE%"',
+            ')',
+            'echo [%date% %time%] Update complete >> "%LOG%"',
             "endlocal",
             "exit /b 0",
         ]
 
         updater_bat.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
         _append_startup_log(f"Prepared updater script: {updater_bat}")
+        _append_startup_log(f"Update log will be written to: {log_file}")
 
-        comspec = os.environ.get("ComSpec", r"C:\\Windows\\System32\\cmd.exe")
+        comspec = os.environ.get("ComSpec", r"C:\Windows\System32\cmd.exe")
         subprocess.Popen(
-            [
-                comspec,
-                "/d",
-                "/c",
-                "call",
-                str(updater_bat),
-            ],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            [comspec, "/d", "/c", str(updater_bat)],
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
     def _check_for_updates(self):
