@@ -489,7 +489,6 @@ class LoginDialog(tk.Toplevel):
         center.pack(expand=True)
 
         ttk.Label(center, text="TheraTrak Pro", font=FONT_H1).pack(anchor="center")
-        ttk.Label(center, text=f"Version {vm.get_version_string()}", foreground=MUTED).pack(anchor="center", pady=(0, 10))
 
         self.v_user = tk.StringVar()
         self.v_pass = tk.StringVar()
