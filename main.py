@@ -1639,6 +1639,7 @@ class CMS1500Tab(ttk.Frame):
         act.pack(fill="x", before=self._form_canvas)
         btn(act, "Auto-Populate from Patient",  self._auto_populate).pack(side="left", padx=4)
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
+        btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
 
         self._refresh_claims()
@@ -1968,6 +1969,175 @@ class CMS1500Tab(ttk.Frame):
                 "Could not generate PDF.\n"
                 "Make sure 'reportlab' is installed:\n"
                 "  pip install reportlab")
+
+    def _preview_print(self):
+        fd = self._collect_form_data()
+        sample_image = ASSETS_DIR / "cms1500_sample.png"
+        if not sample_image.exists() or Image is None or ImageTk is None:
+            messagebox.showerror(
+                "Print Preview",
+                "The CMS-1500 form background is not available for preview.",
+            )
+            return
+
+        original = Image.open(sample_image)
+        max_width = 1180
+        scale = min(1.0, max_width / float(original.width))
+        if scale < 1.0:
+            display = original.resize(
+                (int(original.width * scale), int(original.height * scale)),
+                Image.Resampling.LANCZOS,
+            )
+        else:
+            display = original.copy()
+
+        win = tk.Toplevel(self)
+        apply_window_icon(win)
+        win.title("CMS-1500 Print Preview")
+        win.geometry("1240x900")
+
+        frm = ttk.Frame(win)
+        frm.pack(fill="both", expand=True)
+
+        cv = tk.Canvas(frm, bg="#f5f5f5", highlightthickness=0)
+        vsb = ttk.Scrollbar(frm, orient="vertical", command=cv.yview)
+        hsb = ttk.Scrollbar(frm, orient="horizontal", command=cv.xview)
+        cv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        cv.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        frm.rowconfigure(0, weight=1)
+        frm.columnconfigure(0, weight=1)
+
+        preview_img = ImageTk.PhotoImage(display)
+        cv.create_image(0, 0, image=preview_img, anchor="nw")
+        cv.config(scrollregion=(0, 0, display.width, display.height))
+        win._preview_img = preview_img
+
+        def sx(v):
+            return int(round(v * scale))
+
+        def sy(v):
+            return int(round(v * scale))
+
+        font_size = max(7, int(round(11 * scale)))
+        line_size = max(6, int(round(10 * scale)))
+
+        def draw_field(name, x, y, *, size=None, anchor="nw"):
+            val = fd.get(name, "")
+            if val is None:
+                return
+            text = str(val).strip()
+            if not text:
+                return
+            cv.create_text(
+                sx(x),
+                sy(y),
+                text=text,
+                anchor=anchor,
+                fill="black",
+                font=("Arial", size or font_size),
+            )
+
+        for name, x, y in [
+            ("ins_id", 760, 212),
+            ("patient_name", 44, 283),
+            ("patient_dob", 492, 285),
+            ("patient_sex", 675, 285),
+            ("ins_name", 760, 283),
+            ("patient_address", 40, 337),
+            ("ins_relation", 485, 337),
+            ("ins_address2", 760, 337),
+            ("patient_city", 40, 390),
+            ("patient_state", 392, 390),
+            ("patient_zip", 40, 448),
+            ("patient_phone", 216, 448),
+            ("ins_city2", 760, 390),
+            ("ins_state2", 1088, 390),
+            ("ins_zip2", 760, 448),
+            ("ins_phone", 934, 448),
+            ("other_ins_name", 40, 504),
+            ("other_ins_policy", 40, 560),
+            ("ins_group", 760, 503),
+            ("ins_dob", 816, 559),
+            ("ins_sex", 1036, 559),
+            ("other_claim_id", 760, 617),
+            ("ins_plan", 760, 621),
+            ("other_plan", 40, 676),
+            ("patient_sig", 110, 742),
+            ("patient_sig_date", 502, 742),
+            ("ins_sig", 787, 742),
+            ("illness_date", 38, 823),
+            ("illness_qual", 206, 823),
+            ("other_date", 432, 823),
+            ("other_date_qual", 600, 823),
+            ("unable_from", 816, 823),
+            ("unable_to", 997, 823),
+            ("ref_provider", 38, 880),
+            ("ref_qual", 421, 880),
+            ("ref_npi", 459, 880),
+            ("hospital_from", 817, 880),
+            ("hospital_to", 998, 880),
+            ("add_info", 38, 939),
+            ("outside_lab", 816, 939),
+            ("outside_lab_charge", 972, 939),
+            ("dx1", 95, 977),
+            ("dx2", 286, 977),
+            ("dx3", 477, 977),
+            ("dx4", 669, 977),
+            ("dx5", 95, 1007),
+            ("dx6", 286, 1007),
+            ("dx7", 477, 1007),
+            ("dx8", 669, 1007),
+            ("resubmission_code", 816, 974),
+            ("original_ref_no", 936, 974),
+            ("auth_number", 760, 994),
+            ("tax_id", 38, 1365),
+            ("tax_id_type", 223, 1365),
+            ("patient_acct", 381, 1365),
+            ("accept_assign", 605, 1365),
+            ("total_charge", 774, 1365),
+            ("amount_paid", 928, 1365),
+            ("provider_sig", 38, 1425),
+            ("billing_date", 271, 1501),
+            ("facility_name", 378, 1425),
+            ("facility_address", 378, 1460),
+            ("facility_city_state_zip", 378, 1492),
+            ("facility_npi", 496, 1501),
+            ("facility_other_id", 661, 1501),
+            ("billing_name", 771, 1425),
+            ("billing_address", 771, 1460),
+            ("billing_city_state_zip", 771, 1492),
+            ("billing_phone", 1000, 1365),
+            ("billing_npi", 780, 1501),
+            ("billing_other_id", 947, 1501),
+        ]:
+            draw_field(name, x, y)
+
+        line_y = [1048, 1105, 1162, 1219, 1276, 1333]
+        service_lines = fd.get("service_lines", [])
+        for i, y in enumerate(line_y):
+            sl = service_lines[i] if i < len(service_lines) else {}
+            if not sl:
+                continue
+
+            def draw_sl(key, x):
+                txt = str(sl.get(key, "") or "").strip()
+                if txt:
+                    cv.create_text(sx(x), sy(y), text=txt, anchor="nw", fill="black", font=("Arial", line_size))
+
+            draw_sl("from_date", 47)
+            draw_sl("to_date", 162)
+            draw_sl("pos", 285)
+            draw_sl("cpt", 369)
+            draw_sl("modifier", 468)
+            draw_sl("dx_ptr", 648)
+            draw_sl("charge", 769)
+            draw_sl("units", 872)
+            draw_sl("epsdt", 919)
+            draw_sl("family_plan", 946)
+            draw_sl("id_qual", 979)
+            draw_sl("npi", 1000)
 
     def _refresh_claims(self):
         self.claim_tv.delete(*self.claim_tv.get_children())
