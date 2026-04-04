@@ -2645,18 +2645,20 @@ class TheraTrakApp(tk.Tk):
         x = max(0, (progress_win.winfo_screenwidth() - width) // 2)
         y = max(0, (progress_win.winfo_screenheight() - height) // 2)
         progress_win.geometry(f"{width}x{height}+{x}+{y}")
+        progress_win.update()
 
         downloaded = 0
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "TheraTrak-Pro"})
             with urllib.request.urlopen(req, timeout=60) as resp:
                 total_raw = resp.headers.get("Content-Length")
-                total = int(total_raw) if total_raw and total_raw.isdigit() else 0
+                total = int(total_raw) if total_raw and total_raw.isdigit() else int(getattr(resp, "length", 0) or 0)
 
                 if total > 0:
                     bar.configure(mode="determinate", maximum=total, value=0)
                 else:
                     bar.start(12)
+                    progress_win.update()
 
                 with destination.open("wb") as out_f:
                     while True:
@@ -2670,28 +2672,34 @@ class TheraTrakApp(tk.Tk):
                             bar["value"] = downloaded
                             pct = min(100.0, (downloaded / total) * 100.0)
                             status_var.set(f"Downloaded {pct:.1f}% ({downloaded // 1024} KB of {total // 1024} KB)")
+                            progress_win.title(f"Downloading Update - {pct:.1f}%")
                         else:
                             status_var.set(f"Downloaded {downloaded // 1024} KB")
+                            progress_win.title(f"Downloading Update - {downloaded // 1024} KB")
 
-                        progress_win.update_idletasks()
+                        progress_win.update()
         finally:
             if bar.cget("mode") == "indeterminate":
                 bar.stop()
             progress_win.destroy()
 
     def _launch_installer_after_exit(self, installer_path):
-        app_exe = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        app_exe = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "TheraTrak Pro" / "TheraTrak Pro.exe"
+        if not app_exe.exists() and getattr(sys, "frozen", False):
+            app_exe = Path(sys.executable)
         updater_bat = UPDATE_TEMP_DIR / "run_theratrak_update.bat"
         app_name = "TheraTrak Pro.exe"
+        app_pid = os.getpid()
 
         lines = [
             "@echo off",
             "setlocal",
             f"set \"INSTALLER={installer_path}\"",
             f"set \"APP_NAME={app_name}\"",
-            f"set \"APP_EXE={app_exe if app_exe else ''}\"",
+            f"set \"APP_PID={app_pid}\"",
+            f"set \"APP_EXE={app_exe}\"",
             ":wait_close",
-            "tasklist /FI \"IMAGENAME eq %APP_NAME%\" | find /I \"%APP_NAME%\" >nul",
+            "tasklist /FI \"PID eq %APP_PID%\" | find \"%APP_PID%\" >nul",
             "if not errorlevel 1 (",
             "  ping 127.0.0.1 -n 2 >nul",
             "  goto wait_close",
