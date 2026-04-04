@@ -6,6 +6,7 @@ $python = Join-Path $root '.venv\Scripts\python.exe'
 $icon = Join-Path $root 'Theratrak-Pro.ico'
 $mainPy = Join-Path $root 'main.py'
 $installerPy = Join-Path $root 'installer\installer.py'
+$uninstallerPy = Join-Path $root 'installer\uninstaller.py'
 $versionJson = Join-Path $root 'version.json'
 $distDir = Join-Path $root 'dist'
 $buildDir = Join-Path $root 'build'
@@ -34,6 +35,22 @@ $pyInstallerArgs = @(
 
 & $python @pyInstallerArgs
 
+$uninstallerArgs = @(
+    '-m', 'PyInstaller',
+    '--noconfirm',
+    '--clean',
+    '--windowed',
+    '--onefile',
+    '--name', 'TheraTrak Pro Uninstaller',
+    '--icon', $icon,
+    '--distpath', $distDir,
+    '--workpath', (Join-Path $buildDir 'uninstaller'),
+    '--specpath', $buildDir,
+    $uninstallerPy
+)
+
+& $python @uninstallerArgs
+
 $installerArgs = @(
     '-m', 'PyInstaller',
     '--noconfirm',
@@ -46,6 +63,7 @@ $installerArgs = @(
     '--workpath', (Join-Path $buildDir 'installer'),
     '--specpath', $buildDir,
     '--add-data', ((Join-Path $distDir 'TheraTrak Pro.exe') + ';.'),
+    '--add-data', ((Join-Path $distDir 'TheraTrak Pro Uninstaller.exe') + ';.'),
     '--add-data', ($icon + ';.'),
     '--add-data', ($versionJson + ';.'),
     $installerPy

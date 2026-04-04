@@ -2561,7 +2561,16 @@ if __name__ == "__main__":
 
     if login.user:
         app.set_logged_in_user(login.user)
+        if login.winfo_exists():
+            login.destroy()
         app.deiconify()
+        app.update_idletasks()
+        try:
+            app.state("zoomed")
+        except tk.TclError:
+            screen_w = app.winfo_screenwidth()
+            screen_h = app.winfo_screenheight()
+            app.geometry(f"{screen_w}x{screen_h}+0+0")
         app.mainloop()
     else:
         app.destroy()
