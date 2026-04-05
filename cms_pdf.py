@@ -4,6 +4,7 @@ Generates an 8.5 × 11 inch letter-size PDF with all CMS-1500 fields.
 """
 from datetime import date
 from pathlib import Path
+import re
 
 try:
     from reportlab.pdfgen import canvas as rl_canvas
@@ -61,6 +62,14 @@ def _checkbox(c, x, y, checked=False, label=""):
     if label:
         c.setFont(FONT, FONT_SM)
         c.drawString(x + sz + 2, y + 1, label)
+
+
+def _normalize_pos(value, default="11"):
+    text = str(value or "").strip()
+    if not text:
+        return default
+    m = re.match(r"^(\d{2})", text)
+    return m.group(1) if m else text
 
 
 # ─── Main PDF builder ──────────────────────────────────────────────────────────
@@ -269,6 +278,8 @@ def _draw_form_on_sample_background(c, fd):
             ("npi", 1000),
         ]:
             txt = str(sl.get(key, "") or "").strip()
+            if key == "pos":
+                txt = _normalize_pos(txt)
             if txt:
                 field_name = f"sl{i+1}_{key}"
                 ax, ay = _aligned_xy(fd, field_name, x, y)
@@ -460,7 +471,7 @@ def _draw_form(c, fd):
             sl = service_lines[i]
             _value(c, sl.get("from_date", ""),   bx + 2,           ly + 10)
             _value(c, sl.get("to_date", ""),     bx + 60,          ly + 10)
-            _value(c, sl.get("pos", "11"),       bx + 1.15 * inch, ly + 10)
+            _value(c, _normalize_pos(sl.get("pos", "11")), bx + 1.15 * inch, ly + 10)
             _value(c, sl.get("cpt", ""),         bx + 1.65 * inch, ly + 10)
             _value(c, sl.get("modifier", ""),    bx + 2.45 * inch, ly + 10)
             _value(c, sl.get("dx_ptr", ""),      bx + 3.35 * inch, ly + 10)
@@ -551,7 +562,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
         service_lines.append({
             "from_date": g(s, "session_date"),
             "to_date":   g(s, "session_date"),
-            "pos":       g(s, "place_of_service", "11"),
+            "pos":       _normalize_pos(g(s, "place_of_service", "11")),
             "cpt":       g(s, "cpt_code", "90834"),
             "modifier":  g(s, "cpt_modifier"),
             "dx_ptr":    "A",

@@ -2786,9 +2786,8 @@ class CMS1500Tab(ttk.Frame):
             sl = sls[i] if i < len(sls) else {}
             for key, var in sl_vars.items():
                 value = sl.get(key, "")
-                # Convert place_of_service code back to display format for UI
-                if key == "place_of_service":
-                    value = _get_place_display(str(value) if value is not None else "")
+                if key == "pos":
+                    value = _extract_place_code(str(value) if value is not None else "")
                 var.set(str(value) if value is not None else "")
         self._current_pid = pid
         self._current_sessions = sessions
@@ -2863,8 +2862,8 @@ class CMS1500Tab(ttk.Frame):
         for sl in self._sl_vars:
             entry = {k: v.get().strip() for k, v in sl.items()}
             if any(entry.values()):
-                # Also extract place code for each service line
-                entry["place_of_service"] = _extract_place_code(entry.get("place_of_service", "11"))
+                # Service line POS is stored under "pos".
+                entry["pos"] = _extract_place_code(entry.get("pos", "11"))
                 fd["service_lines"].append(entry)
         fd["alignment_offsets"] = {
             "section_offsets": {
