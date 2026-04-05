@@ -67,6 +67,13 @@ GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/Irish-Coder69/TheraTra
 GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/latest"
 UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
 STARTUP_LOG_FILE = APP_ROOT / "startup.log"
+ALIGNMENT_OFFSETS_FILE = APP_ROOT / "cms1500_alignment_offsets.json"
+ALIGNMENT_OFFSETS_FALLBACK_FILE = (
+    Path(os.environ.get("LOCALAPPDATA", Path.home()))
+    / "Programs"
+    / "TheraTrak Pro"
+    / "cms1500_alignment_offsets.json"
+)
 
 # Build lookup mapping for place of service codes
 _PLACE_CODE_MAP = {p[0]: p[1] for p in PLACE_CODES}
@@ -2038,7 +2045,53 @@ class CMS1500Tab(ttk.Frame):
         self._drag_state = None
         self._resize_drag_state = None
         self._form_scale = 1.0
+        self._load_alignment_offsets_from_file()
         self._build()
+
+    def _load_alignment_offsets_from_file(self):
+        candidates = [ALIGNMENT_OFFSETS_FILE, ALIGNMENT_OFFSETS_FALLBACK_FILE]
+        path = next((p for p in candidates if p.exists()), None)
+        if not path:
+            return
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        section_offsets = data.get("section_offsets", {})
+        field_offsets = data.get("field_offsets", {})
+        field_size_offsets = data.get("field_size_offsets", {})
+
+        if isinstance(section_offsets, dict):
+            for key, vals in section_offsets.items():
+                if (
+                    key in self._overlay_offsets
+                    and isinstance(vals, (list, tuple))
+                    and len(vals) == 2
+                ):
+                    self._overlay_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
+
+        if isinstance(field_offsets, dict):
+            for key, vals in field_offsets.items():
+                if (
+                    key in self._overlay_field_offsets
+                    and isinstance(vals, (list, tuple))
+                    and len(vals) == 2
+                ):
+                    self._overlay_field_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
+
+        if isinstance(field_size_offsets, dict):
+            for key, vals in field_size_offsets.items():
+                if (
+                    key in self._overlay_field_size_offsets
+                    and isinstance(vals, (list, tuple))
+                    and len(vals) == 2
+                ):
+                    self._overlay_field_size_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
 
     def _build(self):
         # Left: claim list
