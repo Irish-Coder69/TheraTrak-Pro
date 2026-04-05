@@ -554,11 +554,20 @@ def cms_form_data_from_patient(patient, sessions, provider):
             return default
 
     provider_id_qualifier = g(provider, "id_qualifier", "ZZ")
+    taxonomy_codes = g(provider, "license_num")
+    referring_provider_taxonomy_codes = taxonomy_codes
     service_lines = []
     total_charge = 0.0
-    for s in sessions[:6]:
+    for i, s in enumerate(sessions[:6], start=1):
         fee = float(g(s, "fee", 0) or 0)
         total_charge += fee
+        epsdt_value = ""
+        if i == 1:
+            epsdt_value = taxonomy_codes
+        elif i == 5:
+            epsdt_value = referring_provider_taxonomy_codes
+        elif i == 6:
+            epsdt_value = provider_id_qualifier
         service_lines.append({
             "from_date": g(s, "session_date"),
             "to_date":   g(s, "session_date"),
@@ -568,6 +577,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
             "dx_ptr":    "A",
             "charge":    fee,
             "units":     "1",
+            "epsdt":     epsdt_value,
             "id_qual":   provider_id_qualifier,
             "npi":       g(provider, "npi"),
         })
@@ -578,7 +588,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
     facility_city_state_zip = f"{g(provider,'city')} {g(provider,'state')} {g(provider,'zip')}".strip()
     billing_city_state_zip = facility_city_state_zip
     fd = {
-        "ins_type":       "",
+        "ins_type":       taxonomy_codes,
         "ins_id":         g(patient, "ins_id"),
         "patient_name":   pt_name,
         "patient_dob":    g(patient, "dob"),
@@ -627,7 +637,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "total_charge":   total_charge,
         "amount_paid":    0.0,
         "provider_sig":   "Signature on File",
-        "billing_date":   date.today().strftime("%m/%d/%Y"),
+        "billing_date":   taxonomy_codes,
         "facility_name":  g(provider, "practice_name") or f"{g(provider,'provider_first')} {g(provider,'provider_last')}".strip(),
         "facility_address": g(provider, "address"),
         "facility_city_state_zip": facility_city_state_zip,
@@ -641,6 +651,11 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "billing_qualifier": provider_id_qualifier,
         "billing_npi":    g(provider, "npi"),
         "billing_other_id": g(provider, "license_num"),
+        "taxonomy_codes": taxonomy_codes,
+        "referring_provider_taxonomy_codes": referring_provider_taxonomy_codes,
+        "patient_status": taxonomy_codes,
+        "other_ins_dob": taxonomy_codes,
+        "other_ins_employer": taxonomy_codes,
     }
 
     relation = str(fd.get("ins_relation", "") or "").strip().lower()

@@ -300,7 +300,7 @@
     ],
     "sl1_epsdt": [
       95,
-      343
+      345
     ],
     "accept_assign": [
       -21,
@@ -720,7 +720,7 @@
     ],
     "patient_status": [
       526,
-      705
+      704
     ],
     "patient_status_single": [
       -153,
@@ -1221,31 +1221,23 @@
       0
     ],
     "other_ins_dob": [
-      29,
+      30,
       0
     ],
     "ins_type": [
       64,
-      1
-    ],
-    "billing_qualifier": [
-      8,
       0
     ],
     "billing_date": [
-      86,
-      1
+      84,
+      2
     ],
     "other_ins_employer": [
       -70,
       0
     ],
     "sl1_epsdt": [
-      150,
-      2
-    ],
-    "sl5_epsdt": [
-      228,
+      148,
       0
     ]
   }
