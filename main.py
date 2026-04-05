@@ -2822,7 +2822,13 @@ class CMS1500Tab(ttk.Frame):
         cb.pack(padx=10, pady=4)
 
         ttk.Label(picker, text="Select Sessions (hold Ctrl for multi-select):").pack(anchor="w", padx=10, pady=4)
-        sess_lv = tk.Listbox(picker, selectmode="multiple", height=10, font=FONT_UI)
+        sess_lv = tk.Listbox(
+            picker,
+            selectmode="extended",
+            exportselection=False,
+            height=10,
+            font=FONT_UI,
+        )
         sess_lv.pack(fill="both", expand=True, padx=10)
 
         def on_pt_select(*a):
