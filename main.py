@@ -310,10 +310,9 @@ class UserDirectoryDialog(tk.Toplevel):
         # ── Identity
         fe("Username:", "username", 2)
         fe2("First Name:", "first_name", "Last Name:", "last_name", 3)
-        fe3("Middle Name:", "middle_name", "Suffix:", "suffix", "Role:", "role_unused", 4)
-        # Replace the placeholder entry for Role with a proper Combobox
-        for w in form.grid_slaves(row=4, column=5):
-            w.destroy()
+        ttk.Label(form, text="Middle Name:").grid(row=4, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(form, textvariable=fv("middle_name")).grid(row=4, column=1, sticky="ew", padx=(0, 4), pady=3)
+        ttk.Label(form, text="Role:").grid(row=4, column=4, sticky="e", padx=(4, 2), pady=3)
         ttk.Combobox(
             form, textvariable=fv("role"),
             values=["Admin", "User", "Provider", "Billing", "Read-Only"],
@@ -379,7 +378,7 @@ class UserDirectoryDialog(tk.Toplevel):
         if not row:
             return
         self._edit_uid = uid
-        for key in ("username", "first_name", "middle_name", "last_name", "suffix",
+        for key in ("username", "first_name", "middle_name", "last_name",
             "email", "phone", "role", "license_number", "npi_number",
                     "address", "city", "state", "zip",
                     "billing_address", "billing_city", "billing_state", "billing_zip"):
@@ -479,22 +478,16 @@ class CreateAccountDialog(tk.Toplevel):
         _e_confirm = ttk.Entry(frm, textvariable=self._field("confirm_password"), show="*", width=24)
         _e_confirm.grid(row=3, column=4, sticky="w")
 
-        # ── Row 4: Suffix | Show Password toggle ──────────────────
+        # ── Row 4: Show Password toggle ───────────────────────────
         _show_pw_var = tk.BooleanVar(value=False)
         def _toggle_show_pw():
             ch = "" if _show_pw_var.get() else "*"
             _e_password.config(show=ch)
             _e_confirm.config(show=ch)
-        ttk.Label(frm, text="Suffix").grid(row=4, column=0, sticky="e", padx=4, pady=4)
-        _cb_suffix = ttk.Combobox(frm, textvariable=self._field("suffix"),
-                     values=["", "PhD", "PsyD", "LCSW", "LMFT", "LPC", "LCPC", "MSW", "MA", "MS",
-                             "MD", "DO", "NP", "PA", "RN", "EdD", "DSW", "DMin"],
-                     width=12, state="readonly")
-        _cb_suffix.grid(row=4, column=1, sticky="w")
         ttk.Checkbutton(
             frm, text="Show Password", variable=_show_pw_var,
             command=_toggle_show_pw
-        ).grid(row=4, column=3, columnspan=2, sticky="w", padx=4, pady=4)
+        ).grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
         # ── Row 5: Phone | Role ───────────────────────────────────
         ttk.Label(frm, text="Phone").grid(row=5, column=0, sticky="e", padx=4, pady=4)
@@ -572,7 +565,7 @@ class CreateAccountDialog(tk.Toplevel):
 
         # ── Tab order: left column top→bottom, then right column ──
         self._set_tab_order([
-            _e_first, _e_middle, _e_last, _cb_suffix, _e_phone, _e_email,
+            _e_first, _e_middle, _e_last, _e_phone, _e_email,
             _e_address, _e_city, _cb_state, _e_zip, _e_license, _e_npi,
             _e_username, _e_password, _e_confirm, _cb_role,
             self._billing_widgets["billing_address"],
@@ -3368,13 +3361,14 @@ class SettingsTab(ttk.Frame):
             ("Practice Name",         "practice_name",  0, 0),
             ("Provider Last Name",     "provider_last",  1, 0),
             ("Provider First Name",    "provider_first", 1, 2),
-            ("Credentials (LCSW etc.)","credentials",    2, 0),
-            ("NPI",                    "npi",            2, 2),
-            ("Tax ID",                 "tax_id",         3, 0),
-            ("Tax ID Type (EIN/SSN)",  "tax_id_type",    3, 2),
-            ("ID Qualifier",           "id_qualifier",   4, 0),
-            ("Taxonomy Codes",         "license_num",    4, 2),
-            ("UPIN (legacy)",          "upin",           5, 0),
+            ("Provider Suffix",        "provider_suffix",2, 0),
+            ("Credentials (LCSW etc.)","credentials",    2, 2),
+            ("NPI",                    "npi",            3, 0),
+            ("Tax ID",                 "tax_id",         3, 2),
+            ("Tax ID Type (EIN/SSN)",  "tax_id_type",    4, 0),
+            ("ID Qualifier",           "id_qualifier",   4, 2),
+            ("Taxonomy Codes",         "license_num",    5, 0),
+            ("UPIN (legacy)",          "upin",           5, 2),
             ("Address",                "address",        6, 0),
             ("City",                   "city",           7, 0),
             ("State",                  "state",          7, 2),

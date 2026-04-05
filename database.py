@@ -145,6 +145,7 @@ def initialize_db():
         practice_name     TEXT DEFAULT '',
         provider_last     TEXT DEFAULT '',
         provider_first    TEXT DEFAULT '',
+        provider_suffix   TEXT DEFAULT '',
         credentials       TEXT DEFAULT '',
         npi               TEXT DEFAULT '',
         tax_id            TEXT DEFAULT '',
@@ -240,6 +241,7 @@ def _migrate_provider_settings_table():
     """Add any missing columns to provider_settings (forward migration)."""
     new_columns = [
         ("id_qualifier", "TEXT DEFAULT 'ZZ'"),
+        ("provider_suffix", "TEXT DEFAULT ''"),
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -611,10 +613,10 @@ def create_user(data: dict):
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO users
-           (username, password_hash, password_salt, first_name, middle_name, last_name, suffix, email,
+           (username, password_hash, password_salt, first_name, middle_name, last_name, email,
                                 phone, role, address, city, state, zip, license_number, npi_number,
             billing_address, billing_city, billing_state, billing_zip, is_active)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
         (
             username,
             password_hash,
@@ -622,7 +624,6 @@ def create_user(data: dict):
             first_name,
             (data.get("middle_name") or "").strip(),
             last_name,
-            (data.get("suffix") or "").strip(),
             (data.get("email") or "").strip(),
             (data.get("phone") or "").strip(),
             (data.get("role") or "User").strip() or "User",
@@ -671,7 +672,7 @@ def verify_user_credentials(username: str, password: str):
 def get_all_users():
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, username, first_name, middle_name, last_name, suffix, email, phone, role, address, city, state, zip, license_number, npi_number, billing_address, billing_city, billing_state, billing_zip, is_active, created_at, last_login FROM users ORDER BY username"
+        "SELECT id, username, first_name, middle_name, last_name, email, phone, role, address, city, state, zip, license_number, npi_number, billing_address, billing_city, billing_state, billing_zip, is_active, created_at, last_login FROM users ORDER BY username"
     ).fetchall()
     conn.close()
     return rows
@@ -680,7 +681,7 @@ def get_all_users():
 def update_user(uid: int, data: dict):
     """Update an existing user's profile fields. If 'password' is non-empty, reset the password hash."""
     profile_fields = [
-        "first_name", "middle_name", "last_name", "suffix",
+        "first_name", "middle_name", "last_name",
         "email", "phone", "role",
         "address", "city", "state", "zip",
         "license_number", "npi_number",
