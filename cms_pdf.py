@@ -536,6 +536,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
         except (KeyError, IndexError, TypeError):
             return default
 
+    provider_id_qualifier = g(provider, "id_qualifier", "ZZ")
     service_lines = []
     total_charge = 0.0
     for s in sessions[:6]:
@@ -550,6 +551,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
             "dx_ptr":    "A",
             "charge":    fee,
             "units":     "1",
+            "id_qual":   provider_id_qualifier,
             "npi":       g(provider, "npi"),
         })
 
@@ -558,8 +560,6 @@ def cms_form_data_from_patient(patient, sessions, provider):
     patient_phone = g(patient, "phone_home") or g(patient, "phone_cell") or g(patient, "phone_work")
     facility_city_state_zip = f"{g(provider,'city')} {g(provider,'state')} {g(provider,'zip')}".strip()
     billing_city_state_zip = facility_city_state_zip
-    provider_id_qualifier = g(provider, "id_qualifier", "ZZ")
-
     fd = {
         "ins_type":       "",
         "ins_id":         g(patient, "ins_id"),

@@ -1746,7 +1746,7 @@ class CMS1500Tab(ttk.Frame):
             "billing_city_state_zip": [-20, 69],
             "billing_address": [-19, 78],
             "billing_name": [-19, 89],
-            "billing_phone": [-15, 126],
+            "billing_phone": [-3, 126],
             "amount_paid": [24, 101],
             "total_charge": [22, 100],
             "sl6_npi": [9, 84],
