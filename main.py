@@ -2953,25 +2953,37 @@ class CMS1500Tab(ttk.Frame):
             return
 
         try:
-            import ctypes
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            default_printer = subprocess.check_output(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "(Get-CimInstance Win32_Printer | Where-Object {$_.Default -eq $true} | Select-Object -First 1 -ExpandProperty Name)",
+                ],
+                text=True,
+                creationflags=creationflags,
+            ).strip()
 
-            needed = ctypes.c_uint(0)
-            ctypes.windll.winspool.drv.GetDefaultPrinterW(None, ctypes.byref(needed))
-            if needed.value <= 1:
-                raise OSError("No default printer found.")
-
-            printer_buf = ctypes.create_unicode_buffer(needed.value)
-            ok = ctypes.windll.winspool.drv.GetDefaultPrinterW(printer_buf, ctypes.byref(needed))
-            if not ok:
-                raise OSError("Unable to read default printer.")
-
-            subprocess.Popen([
-                "rundll32",
-                "printui.dll,PrintUIEntry",
-                "/e",
-                "/n",
-                printer_buf.value,
-            ])
+            if default_printer:
+                subprocess.Popen(
+                    [
+                        "rundll32",
+                        "printui.dll,PrintUIEntry",
+                        "/e",
+                        "/n",
+                        default_printer,
+                    ],
+                    creationflags=creationflags,
+                )
+            else:
+                subprocess.Popen(["control.exe", "printers"], creationflags=creationflags)
+                messagebox.showinfo(
+                    "Print Setup",
+                    "Default printer not found. Opened Printers so you can choose and adjust settings.",
+                )
         except OSError as ex:
             messagebox.showerror("Print Setup", f"Could not open printer setup:\n{ex}")
         except Exception as ex:
