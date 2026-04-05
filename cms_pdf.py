@@ -35,6 +35,7 @@ FONT_BOLD = "Helvetica-Bold"
 FONT_SM = 7
 FONT_MD = 8
 FONT_LG = 10
+PDF_TEXT_Y_NUDGE_PX = 2.0
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ def _draw_form_on_sample_background(c, fd):
 
     def px_to_pt_y(y):
         # ReportLab origin is bottom-left; field map y is top-origin.
-        return H - (y * sy)
+        return H - ((y + PDF_TEXT_Y_NUDGE_PX) * sy)
 
     c.drawImage(bg, 0, 0, width=W, height=H, preserveAspectRatio=False, mask="auto")
     c.setFillColorRGB(0, 0, 0)
