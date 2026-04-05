@@ -137,9 +137,18 @@ def _draw_form_on_sample_background(c, fd):
     except Exception:
         return False
 
-    # The on-screen field map uses these pixel coordinates from the sample image.
-    bg_w = 1170.0
-    bg_h = 1515.0
+    # Use the actual background image dimensions so overlay coordinates scale correctly.
+    try:
+        bg_w_raw, bg_h_raw = bg.getSize()
+        bg_w = float(bg_w_raw)
+        bg_h = float(bg_h_raw)
+    except Exception:
+        bg_w = 1170.0
+        bg_h = 1515.0
+
+    if bg_w <= 0 or bg_h <= 0:
+        bg_w = 1170.0
+        bg_h = 1515.0
     sx = W / bg_w
     sy = H / bg_h
 
