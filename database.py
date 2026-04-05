@@ -77,6 +77,7 @@ def initialize_db():
         referring_name   TEXT DEFAULT '',
         referring_npi    TEXT DEFAULT '',
         intake_date      TEXT DEFAULT '',
+        sig_on_file_date TEXT DEFAULT '',
         status           TEXT DEFAULT 'Active',
         notes            TEXT DEFAULT '',
         created_at       TEXT DEFAULT (datetime('now')),

@@ -828,6 +828,7 @@ class PatientDialog(tk.Toplevel):
         self.title("Edit Patient" if pid else "New Patient")
         self.geometry("820x680")
         self.resizable(True, True)
+        self.state('zoomed')
         self._vars = {}
         self._build()
         if pid:
@@ -871,6 +872,9 @@ class PatientDialog(tk.Toplevel):
 
         ttk.Label(f1, text="Intake Date").grid(row=2, column=2, sticky="e", padx=4)
         ttk.Entry(f1, textvariable=self._fld("intake_date"), width=14).grid(row=2, column=3, sticky="w")
+
+        ttk.Label(f1, text="Sig on File Date").grid(row=2, column=4, sticky="e", padx=4)
+        ttk.Entry(f1, textvariable=self._fld("sig_on_file_date"), width=14).grid(row=2, column=5, sticky="w")
 
         ttk.Label(f1, text="Address").grid(row=3, column=0, sticky="e", padx=4, pady=3)
         ttk.Entry(f1, textvariable=self._fld("address"), width=30).grid(row=3, column=1, sticky="ew", columnspan=3, padx=(0,8))
