@@ -1148,7 +1148,10 @@ class SessionDialog(tk.Toplevel):
             if key == "patient_id":
                 continue
             v = s[key] if key in s.keys() else ""
-            var.set(str(v) if v is not None else "")
+            if key == "fee":
+                var.set(f"{float(v or 0):.2f}")
+            else:
+                var.set(str(v) if v is not None else "")
         # Set patient combo
         for i, p in enumerate(self._pts):
             if p["id"] == s["patient_id"]:
