@@ -44,11 +44,9 @@ def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
         try:
             if src.is_dir():
                 if dst.exists():
-                    if dst.is_dir() and not dst.is_symlink():
-                        shutil.rmtree(dst, ignore_errors=True)
-                    else:
+                    if not dst.is_dir() or dst.is_symlink():
                         dst.unlink(missing_ok=True)
-                shutil.copytree(src, dst)
+                shutil.copytree(src, dst, dirs_exist_ok=True)
             else:
                 shutil.copy2(src, dst)
             return
