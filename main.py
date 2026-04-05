@@ -2156,6 +2156,7 @@ class CMS1500Tab(ttk.Frame):
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
         btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
         btn(act, "Print",                       self._print_pdf).pack(side="left", padx=4)
+        btn(act, "Print Setup",                 self._open_print_setup).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
 
         self._refresh_claims()
@@ -2945,6 +2946,36 @@ class CMS1500Tab(ttk.Frame):
                 messagebox.showinfo("Print", f"Opened print PDF:\n{path}")
         except OSError as ex:
             messagebox.showerror("Print", f"Could not print CMS-1500:\n{ex}")
+
+    def _open_print_setup(self):
+        if not sys.platform.startswith("win"):
+            messagebox.showinfo("Print Setup", "Print setup is only available on Windows.")
+            return
+
+        try:
+            import ctypes
+
+            needed = ctypes.c_uint(0)
+            ctypes.windll.winspool.drv.GetDefaultPrinterW(None, ctypes.byref(needed))
+            if needed.value <= 1:
+                raise OSError("No default printer found.")
+
+            printer_buf = ctypes.create_unicode_buffer(needed.value)
+            ok = ctypes.windll.winspool.drv.GetDefaultPrinterW(printer_buf, ctypes.byref(needed))
+            if not ok:
+                raise OSError("Unable to read default printer.")
+
+            subprocess.Popen([
+                "rundll32",
+                "printui.dll,PrintUIEntry",
+                "/e",
+                "/n",
+                printer_buf.value,
+            ])
+        except OSError as ex:
+            messagebox.showerror("Print Setup", f"Could not open printer setup:\n{ex}")
+        except Exception as ex:
+            messagebox.showerror("Print Setup", f"Unexpected error opening print setup:\n{ex}")
 
     def _preview_print(self):
         fd = self._collect_form_data()
