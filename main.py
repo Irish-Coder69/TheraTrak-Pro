@@ -3688,6 +3688,7 @@ class TheraTrakApp(tk.Tk):
         file_menu.add_separator()
         file_menu.add_command(label="Backup Database", command=self._backup_db)
         file_menu.add_separator()
+        file_menu.add_command(label="Logout", command=self._logout)
         file_menu.add_command(label="Exit", command=self._on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
@@ -3726,6 +3727,20 @@ class TheraTrakApp(tk.Tk):
 
     def _open_user_directory(self):
         UserDirectoryDialog(self)
+
+    def _logout(self):
+        if not messagebox.askyesno("Logout", "Are you sure you want to log out?", parent=self):
+            return
+        self.current_user = None
+        self._update_stats()
+        self.withdraw()
+        login = LoginDialog(self)
+        self.wait_window(login)
+        if login.user:
+            self.set_logged_in_user(login.user)
+            self.deiconify()
+        else:
+            self.destroy()
 
     def _backup_db(self):
         from shutil import copy2
