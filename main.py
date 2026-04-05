@@ -1786,6 +1786,8 @@ class CMS1500Tab(ttk.Frame):
             "sl1_charge": [-8, 128],
             "sl1_epsdt": [-56, 628],
             "accept_assign": [-21, 101],
+            "accept_assign_yes": [-21, 101],
+            "accept_assign_no": [10, 101],
             "patient_acct": [-16, 101],
             "tax_id_ein": [88, 103],
             "tax_id": [13, 104],
@@ -1951,6 +1953,8 @@ class CMS1500Tab(ttk.Frame):
             "sl1_family_plan": [0, 2],
             "sl1_charge": [30, 0],
             "accept_assign": [-60, 0],
+            "accept_assign_yes": [-60, 0],
+            "accept_assign_no": [-60, 0],
             "patient_acct": [44, 0],
             "sl6_modifier": [66, 0],
             "sl5_modifier": [66, 1],
@@ -2448,7 +2452,8 @@ class CMS1500Tab(ttk.Frame):
         add_bottom_entry("tax_id_ein", 223, 1361, 24, height=mini_height, justify="center")
         add_bottom_entry("tax_id_ssn", 472, 1497, 24, height=mini_height, justify="center")
         add_bottom_entry("patient_acct", 381, 1361, 160)
-        add_bottom_entry("accept_assign", 605, 1361, 84, justify="center")
+        add_bottom_entry("accept_assign_yes", 605, 1361, 24, height=mini_height, justify="center")
+        add_bottom_entry("accept_assign_no", 636, 1361, 24, height=mini_height, justify="center")
         add_bottom_entry("total_charge", 774, 1361, 116, justify="center")
         add_bottom_entry("amount_paid", 928, 1361, 98, justify="center")
         add_bottom_entry("provider_sig", 38, 1421, 250)
@@ -2803,7 +2808,7 @@ class CMS1500Tab(ttk.Frame):
         }:
             return "mid"
         if field_name in {
-            "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "total_charge",
+            "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "accept_assign_yes", "accept_assign_no", "total_charge",
             "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
             "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
             "facility_npi", "facility_other_id", "billing_name", "billing_address",
@@ -3000,7 +3005,8 @@ class CMS1500Tab(ttk.Frame):
             ("tax_id", 38, 1365),
             ("tax_id_ein", 223, 1365),
             ("patient_acct", 381, 1365),
-            ("accept_assign", 605, 1365),
+            ("accept_assign_yes", 605, 1365),
+            ("accept_assign_no", 636, 1365),
             ("total_charge", 774, 1365),
             ("amount_paid", 928, 1365),
             ("provider_sig", 38, 1425),
@@ -3076,7 +3082,12 @@ class CMS1500Tab(ttk.Frame):
         self._cv["billing_name"].set(prov.get("practice_name",""))
         self._cv["billing_address"].set(prov.get("address",""))
         self._cv["billing_date"].set(date.today().strftime("%m/%d/%Y"))
-        self._cv["accept_assign"].set("YES")
+        if int(prov.get("accept_assign", 1) or 0):
+            self._cv["accept_assign_yes"].set("X")
+            self._cv["accept_assign_no"].set("")
+        else:
+            self._cv["accept_assign_yes"].set("")
+            self._cv["accept_assign_no"].set("X")
 
     def _open_claim(self, event=None):
         sel = self.claim_tv.selection()
@@ -3093,6 +3104,14 @@ class CMS1500Tab(ttk.Frame):
             fd = json.loads(claim["form_data"])
         except (json.JSONDecodeError, TypeError):
             fd = {}
+        # Backward compatibility for saved claims that used a single accept_assign value.
+        if "accept_assign_yes" not in fd and "accept_assign_no" not in fd and "accept_assign" in fd:
+            if str(fd.get("accept_assign", "")).strip().lower() in {"1", "true", "yes", "y", "x"}:
+                fd["accept_assign_yes"] = "X"
+                fd["accept_assign_no"] = ""
+            else:
+                fd["accept_assign_yes"] = ""
+                fd["accept_assign_no"] = "X"
         self._apply_relation_checkboxes(fd)
         self._current_pid = claim["patient_id"]
         for key, var in self._cv.items():
@@ -3371,9 +3390,11 @@ class SettingsTab(ttk.Frame):
                 row=r, column=c+1, sticky="ew", padx=(0,12))
 
         self.accept_var = tk.IntVar(value=1)
-        ttk.Checkbutton(f1, text="Accept Assignment (Medicare/Medicaid)",
-                        variable=self.accept_var).grid(row=11, column=0, columnspan=4,
-                                                        sticky="w", padx=4, pady=4)
+        assign_frm = ttk.Frame(f1)
+        assign_frm.grid(row=11, column=0, columnspan=4, sticky="w", padx=4, pady=4)
+        ttk.Label(assign_frm, text="Assignment:").pack(side="left", padx=(0, 8))
+        ttk.Radiobutton(assign_frm, text="Accept Assignment", variable=self.accept_var, value=1).pack(side="left", padx=(0, 10))
+        ttk.Radiobutton(assign_frm, text="Do Not Accept Assignment", variable=self.accept_var, value=0).pack(side="left")
 
         btn(f1, "Save Provider Settings", self._save_provider, "Accent.TButton"
             ).grid(row=12, column=0, columnspan=2, pady=10, padx=4, sticky="w")

@@ -96,7 +96,7 @@ def _alignment_section_for_field(field_name: str) -> str:
     }:
         return "mid"
     if field_name in {
-        "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "total_charge",
+        "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "accept_assign_yes", "accept_assign_no", "total_charge",
         "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
         "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
         "facility_npi", "facility_other_id", "billing_name", "billing_address",
@@ -222,7 +222,8 @@ def _draw_form_on_sample_background(c, fd):
         ("tax_id", 38, 1365),
         ("tax_id_ein", 223, 1365),
         ("patient_acct", 381, 1365),
-        ("accept_assign", 605, 1365),
+        ("accept_assign_yes", 605, 1365),
+        ("accept_assign_no", 636, 1365),
         ("total_charge", 774, 1365),
         ("amount_paid", 928, 1365),
         ("provider_sig", 38, 1425),
@@ -483,8 +484,13 @@ def _draw_form(c, fd):
 
     _draw_box(c, bx + 2.7 * inch, bot_y - row_bot_h, 0.7 * inch, row_bot_h)
     _label(c, "27. ACCEPT\nASSIGN?", bx + 2.7 * inch + 2, bot_y - 8, bold=True)
-    _value(c, "YES" if fd.get("accept_assign") else "NO",
-           bx + 2.7 * inch + 2, bot_y - row_bot_h + 4)
+    yes_mark = str(fd.get("accept_assign_yes", "") or "").strip()
+    no_mark = str(fd.get("accept_assign_no", "") or "").strip()
+    if not yes_mark and not no_mark:
+        yes_mark = "X" if fd.get("accept_assign") else ""
+        no_mark = "" if fd.get("accept_assign") else "X"
+    _value(c, yes_mark, bx + 2.7 * inch + 10, bot_y - row_bot_h + 4)
+    _value(c, no_mark, bx + 2.7 * inch + 30, bot_y - row_bot_h + 4)
 
     _draw_box(c, bx + 3.4 * inch, bot_y - row_bot_h, 1.0 * inch, row_bot_h)
     _label(c, "28. TOTAL CHARGE", bx + 3.4 * inch + 2, bot_y - 8, bold=True)
@@ -605,6 +611,8 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "tax_id_ssn":     "X" if g(provider, "tax_id_type", "EIN") == "SSN" else "",
         "patient_acct":   str(g(patient, "id")),
         "accept_assign":  g(provider, "accept_assign", 1),
+        "accept_assign_yes": "X" if int(g(provider, "accept_assign", 1) or 0) else "",
+        "accept_assign_no": "" if int(g(provider, "accept_assign", 1) or 0) else "X",
         "total_charge":   total_charge,
         "amount_paid":    0.0,
         "provider_sig":   "Signature on File",
