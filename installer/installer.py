@@ -39,6 +39,25 @@ def _stop_running_app() -> None:
         pass
 
 
+def _is_skippable_shutil_error(ex: shutil.Error) -> bool:
+    """Return True if copytree failed only on locked files that already exist at destination."""
+    details = ex.args[0] if ex.args and isinstance(ex.args[0], list) else []
+    if not details:
+        return False
+    for item in details:
+        if not isinstance(item, tuple) or len(item) < 3:
+            return False
+        _src, dst, msg = item[0], item[1], str(item[2])
+        if "permission denied" not in msg.lower():
+            return False
+        try:
+            if not Path(dst).exists():
+                return False
+        except OSError:
+            return False
+    return True
+
+
 def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
     for attempt in range(1, attempts + 1):
         try:
@@ -55,9 +74,13 @@ def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
                 raise
             _stop_running_app()
             time.sleep(0.75)
-        except shutil.Error:
+        except shutil.Error as ex:
+            # copytree can raise shutil.Error when one or more files are locked.
+            # If locked files already exist at destination, keep install moving.
+            if _is_skippable_shutil_error(ex):
+                return
             if attempt >= attempts:
-                raise
+                raise ex
             _stop_running_app()
             time.sleep(0.75)
         except OSError:
