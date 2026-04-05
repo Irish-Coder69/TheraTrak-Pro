@@ -55,6 +55,11 @@ def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
                 raise
             _stop_running_app()
             time.sleep(0.75)
+        except shutil.Error:
+            if attempt >= attempts:
+                raise
+            _stop_running_app()
+            time.sleep(0.75)
         except OSError:
             if attempt >= attempts:
                 raise
@@ -257,10 +262,20 @@ def main() -> int:
         root.destroy()
         return 1
 
-    if app_bundle.exists() and app_bundle.is_dir():
-        for item in app_bundle.iterdir():
-            destination = target / item.name
-            _copy_with_retries(item, destination)
+    try:
+        if app_bundle.exists() and app_bundle.is_dir():
+            for item in app_bundle.iterdir():
+                destination = target / item.name
+                _copy_with_retries(item, destination)
+    except Exception as ex:
+        messagebox.showerror(
+            APP_NAME,
+            "Install failed while copying application files.\n"
+            "Please close TheraTrak Pro and retry.\n\n"
+            f"Details: {ex}",
+        )
+        root.destroy()
+        return 1
 
     for name in (UNINSTALL_EXE, ICON_FILE, VERSION_FILE):
         src = source / name
