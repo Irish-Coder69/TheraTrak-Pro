@@ -2152,50 +2152,6 @@ class CMS1500Tab(ttk.Frame):
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
         btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
-        btn(act, "Save Alignment JSON",         self._export_alignment_offsets).pack(side="left", padx=4)
-
-        # Live alignment controls for interactive box placement.
-        align = ttk.Frame(right, padding=(4, 0, 4, 4))
-        align.pack(fill="x", before=self._form_canvas)
-        ttk.Label(align, text="Mode:").pack(side="left", padx=(0, 4))
-        self._align_mode = tk.StringVar(value="section")
-        ttk.Combobox(
-            align,
-            textvariable=self._align_mode,
-            values=["section", "field"],
-            state="readonly",
-            width=8,
-        ).pack(side="left", padx=(0, 8))
-        ttk.Label(align, text="Align Section:").pack(side="left", padx=(0, 4))
-        self._align_section = tk.StringVar(value="top")
-        ttk.Combobox(
-            align,
-            textvariable=self._align_section,
-            values=["top", "mid", "dx", "line", "bot"],
-            state="readonly",
-            width=8,
-        ).pack(side="left")
-        ttk.Label(align, text="Nudge:").pack(side="left", padx=(10, 4))
-        btn(align, "←", lambda: self._nudge_overlay(-1, 0)).pack(side="left", padx=1)
-        btn(align, "↑", lambda: self._nudge_overlay(0, -1)).pack(side="left", padx=1)
-        btn(align, "↓", lambda: self._nudge_overlay(0, 1)).pack(side="left", padx=1)
-        btn(align, "→", lambda: self._nudge_overlay(1, 0)).pack(side="left", padx=1)
-        ttk.Label(align, text="Size:").pack(side="left", padx=(10, 4))
-        btn(align, "W-", lambda: self._resize_overlay_field(-2, 0)).pack(side="left", padx=1)
-        btn(align, "W+", lambda: self._resize_overlay_field(2, 0)).pack(side="left", padx=1)
-        btn(align, "H-", lambda: self._resize_overlay_field(0, -2)).pack(side="left", padx=1)
-        btn(align, "H+", lambda: self._resize_overlay_field(0, 2)).pack(side="left", padx=1)
-        btn(align, "Reset Section", self._reset_overlay_section).pack(side="left", padx=(10, 2))
-        btn(align, "Reset Field", self._reset_overlay_field).pack(side="left", padx=(2, 2))
-        btn(align, "Export Alignment", self._export_alignment_offsets).pack(side="left", padx=(8, 2))
-
-        status_row = ttk.Frame(right, padding=(4, 0, 4, 4))
-        status_row.pack(fill="x", before=self._form_canvas)
-        self._align_status = ttk.Label(status_row, text="", anchor="w")
-        self._align_status.pack(side="left", fill="x", expand=True)
-        self._align_section.trace_add("write", lambda *a: self._update_align_status())
-        self._align_mode.trace_add("write", lambda *a: self._update_align_status())
-        self._update_align_status()
 
         self._refresh_claims()
 
@@ -2307,14 +2263,7 @@ class CMS1500Tab(ttk.Frame):
         bot_x_nudge, bot_y_nudge = self._overlay_offsets.get("bot", [1, 2])
 
         def bind_field_selection(widget, field_key):
-            widget.bind("<Button-1>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
-            widget.bind("<FocusIn>", lambda e, k=field_key: self._select_overlay_field(k), add="+")
-            widget.bind("<ButtonPress-1>", lambda e, k=field_key: self._start_field_drag(e, k), add="+")
-            widget.bind("<B1-Motion>", lambda e, k=field_key: self._drag_field_motion(e, k), add="+")
-            widget.bind("<ButtonRelease-1>", lambda e, k=field_key: self._end_field_drag(e, k), add="+")
-            widget.bind("<Shift-ButtonPress-1>", lambda e, k=field_key: self._start_field_resize_drag(e, k), add="+")
-            widget.bind("<Shift-B1-Motion>", lambda e, k=field_key: self._drag_field_resize_motion(e, k), add="+")
-            widget.bind("<Shift-ButtonRelease-1>", lambda e, k=field_key: self._end_field_resize_drag(e, k), add="+")
+            return
 
         def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
             field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
@@ -2439,19 +2388,11 @@ class CMS1500Tab(ttk.Frame):
         add_top_entry("ins_plan", 760, 617, 368)
         add_top_entry("ins_phone", 934, 444, 192, justify="center")
         add_top_entry("patient_status", 486, 444, 193, justify="center")
-        add_top_entry("patient_status_single", 488, 472, 28, height=mini_height, justify="center")
-        add_top_entry("patient_status_married", 535, 472, 28, height=mini_height, justify="center")
-        add_top_entry("patient_status_other", 582, 472, 28, height=mini_height, justify="center")
-        add_top_entry("patient_status_employed", 488, 500, 28, height=mini_height, justify="center")
-        add_top_entry("patient_status_full_time", 535, 500, 28, height=mini_height, justify="center")
-        add_top_entry("patient_status_part_time", 582, 500, 28, height=mini_height, justify="center")
         add_top_entry("other_ins_name", 40, 500, 386)
         add_top_entry("other_ins_policy", 40, 556, 386)
         add_top_entry("reserved_nucc_b", 40, 614, 386)
         add_top_entry("reserved_nucc_c", 40, 672, 386)
         add_top_entry("other_ins_dob", 434, 558, 144, justify="center")
-        add_top_entry("other_ins_sex", 604, 558, 22, justify="center")
-        add_top_entry("other_ins_sex_f", 632, 558, 22, justify="center")
         add_top_entry("other_ins_employer", 434, 615, 242, justify="center")
         add_top_entry("patient_sig", 110, 738, 338)
         add_top_entry("ins_dob", 816, 555, 178, justify="center")
@@ -2460,8 +2401,6 @@ class CMS1500Tab(ttk.Frame):
         add_top_entry("other_claim_id", 760, 613, 368)
         add_top_entry("ins_sig", 787, 738, 300)
         add_top_entry("other_plan", 40, 672, 386)
-        add_top_entry("other_plan_yes", 434, 675, 28, height=mini_height, justify="center")
-        add_top_entry("other_plan_no", 482, 675, 28, height=mini_height, justify="center")
         add_top_entry("patient_auth_yes", 433, 739, 26, height=mini_height, justify="center")
         add_top_entry("patient_auth_no", 461, 739, 26, height=mini_height, justify="center")
 
@@ -2482,7 +2421,7 @@ class CMS1500Tab(ttk.Frame):
         add_mid_entry("hospital_to", 998, 876, 128, justify="center")
 
         add_mid_entry("outside_lab", 816, 935, 114, justify="center")
-        add_mid_entry("outside_lab_charge", 972, 935, 152, justify="right")
+        add_mid_entry("outside_lab_charge", 972, 935, 152, justify="center")
         add_mid_entry("related_emp_yes", 760, 500, 28, height=mini_height, justify="center")
         add_mid_entry("related_emp_no", 792, 500, 28, height=mini_height, justify="center")
         add_mid_entry("related_auto_yes", 760, 530, 28, height=mini_height, justify="center")
@@ -2517,9 +2456,10 @@ class CMS1500Tab(ttk.Frame):
             add_line_entry(sl_row, "cpt", 369, y, 96, f"sl{line_idx}_cpt", justify="center")
             add_line_entry(sl_row, "modifier", 468, y, 110, f"sl{line_idx}_modifier", justify="center")
             add_line_entry(sl_row, "dx_ptr", 648, y, 60, f"sl{line_idx}_dx_ptr", justify="center")
-            add_line_entry(sl_row, "charge", 769, y, 84, f"sl{line_idx}_charge", justify="right")
+            add_line_entry(sl_row, "charge", 769, y, 84, f"sl{line_idx}_charge", justify="center")
             add_line_entry(sl_row, "units", 872, y, 42, f"sl{line_idx}_units", justify="center")
-            add_line_entry(sl_row, "epsdt", 919, y, 24, f"sl{line_idx}_epsdt", justify="center")
+            if line_idx in {1, 5, 6}:
+                add_line_entry(sl_row, "epsdt", 919, y, 24, f"sl{line_idx}_epsdt", justify="center")
             add_line_entry(sl_row, "family_plan", 946, y, 30, f"sl{line_idx}_family_plan", justify="center")
             add_line_entry(sl_row, "id_qual", 979, y, 34, f"sl{line_idx}_id_qual", justify="center")
             add_line_entry(sl_row, "npi", 1000, y, 124, f"sl{line_idx}_npi", justify="center")
@@ -2776,6 +2716,13 @@ class CMS1500Tab(ttk.Frame):
     def load_from_session(self, pid, sessions):
         """Pre-populate form from patient + sessions."""
         from cms_pdf import cms_form_data_from_patient
+
+        def _fmt_amount(value):
+            try:
+                return f"{float(value):.2f}"
+            except (ValueError, TypeError):
+                return str(value) if value is not None else ""
+
         pt  = db.get_patient(pid)
         prov = db.get_provider()
         fd = cms_form_data_from_patient(pt, sessions, prov)
@@ -2786,6 +2733,8 @@ class CMS1500Tab(ttk.Frame):
                 # Convert place_of_service code back to display format for UI
                 if fld == "place_of_service":
                     value = _get_place_display(str(value) if value is not None else "")
+                if fld in {"outside_lab_charge", "total_charge", "amount_paid"}:
+                    value = _fmt_amount(value)
                 var.set(str(value) if value is not None else "")
         # Service lines
         sls = fd.get("service_lines", [])
@@ -2795,6 +2744,8 @@ class CMS1500Tab(ttk.Frame):
                 value = sl.get(key, "")
                 if key == "pos":
                     value = _extract_place_code(str(value) if value is not None else "", default="")
+                elif key == "charge":
+                    value = _fmt_amount(value)
                 var.set(str(value) if value is not None else "")
         self._current_pid = pid
         self._current_sessions = sessions
@@ -3249,14 +3200,27 @@ class CMS1500Tab(ttk.Frame):
                 fd["accept_assign_no"] = "X"
         self._apply_relation_checkboxes(fd)
         self._current_pid = claim["patient_id"]
+
+        def _fmt_amount(value):
+            try:
+                return f"{float(value):.2f}"
+            except (ValueError, TypeError):
+                return str(value) if value is not None else ""
+
         for key, var in self._cv.items():
             if key in fd:
-                var.set(str(fd[key]) if fd[key] is not None else "")
+                value = fd[key]
+                if key in {"outside_lab_charge", "total_charge", "amount_paid"}:
+                    value = _fmt_amount(value)
+                var.set(str(value) if value is not None else "")
         sls = fd.get("service_lines", [])
         for i, sl_vars in enumerate(self._sl_vars):
             sl = sls[i] if i < len(sls) else {}
             for key, var in sl_vars.items():
-                var.set(str(sl.get(key, "")) if sl.get(key) is not None else "")
+                value = sl.get(key, "")
+                if key == "charge":
+                    value = _fmt_amount(value)
+                var.set(str(value) if value is not None else "")
 
 
 # ─── Reports Tab ───────────────────────────────────────────────────────────────
