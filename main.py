@@ -3403,41 +3403,57 @@ class SettingsTab(ttk.Frame):
         f2 = ttk.Frame(nb, padding=14)
         nb.add(f2, text=" Data Import ")
 
-        ttk.Label(f2, text="Import data from Notes 444 / CMS-1500v6",
-                  font=FONT_LG).pack(anchor="w", pady=(0, 10))
+        ttk.Label(f2, text="Import Data from Any Medical Software",
+                  font=FONT_LG).pack(anchor="w", pady=(0, 6))
 
         info_txt = (
-            "Your existing data (H: drive) is stored in FileMaker Pro 5 binary format (.444 files).\n\n"
-            "RECOMMENDED: Export records from Notes 444 as CSV/Tab-delimited files,\n"
-            "then import them here for the most complete and accurate data transfer.\n\n"
-            "To export from Notes 444:\n"
-            "  1. Open H:\\Important Files\\Notes 444.EXE\n"
-            "  2. Go to File → Export Records\n"
-            "  3. Choose CSV or Tab-Delimited format\n"
-            "  4. Save and then import below.\n\n"
-            "ALTERNATIVE: Raw binary extraction (partial data only – names, dates, phones)\n"
-            "  is available but will not capture all fields."
+            "TheraTrak Pro accepts CSV files exported from any medical practice management\n"
+            "or EHR system (SimplePractice, Kareo, TherapyNotes, Practice Fusion, etc.).\n\n"
+            "HOW TO EXPORT FROM YOUR CURRENT SOFTWARE:\n"
+            "  1. Open your current software and go to its export / reports section.\n"
+            "  2. Choose CSV or Excel format, then save the file.\n"
+            "  3. Use the Import buttons below to bring data into TheraTrak Pro.\n\n"
+            "TheraTrak Pro automatically maps common column names — exact header names\n"
+            "are not required.  For best results, download a CSV template to see the\n"
+            "expected structure and rename your exported columns accordingly."
         )
-        ttk.Label(f2, text=info_txt, justify="left", wraplength=640).pack(anchor="w")
+        ttk.Label(f2, text=info_txt, justify="left", wraplength=680).pack(anchor="w")
 
         ttk.Separator(f2).pack(fill="x", pady=10)
 
-        btn_frame = ttk.Frame(f2)
-        btn_frame.pack(anchor="w")
-        btn(btn_frame, "Import Patients (CSV)",
+        # ── Import buttons ────────────────────────────────────────────────────
+        ttk.Label(f2, text="Import Records", font=("Calibri", 10, "bold")).pack(anchor="w", pady=(0, 4))
+        import_frm = ttk.Frame(f2)
+        import_frm.pack(anchor="w")
+        btn(import_frm, "⬆  Import Patients (CSV)",
             self._import_patients_csv, "Accent.TButton").grid(row=0, column=0, padx=4, pady=4)
-        btn(btn_frame, "Import Sessions (CSV)",
+        btn(import_frm, "⬆  Import Sessions (CSV)",
             self._import_sessions_csv, "Accent.TButton").grid(row=0, column=1, padx=4, pady=4)
-        btn(btn_frame, "Import Billing (CSV)",
+        btn(import_frm, "⬆  Import Billing (CSV)",
             self._import_billing_csv,  "Accent.TButton").grid(row=0, column=2, padx=4, pady=4)
-        btn(btn_frame, "Raw Extract from PTInfo.444",
-            self._raw_extract,          "TButton").grid(row=1, column=0, padx=4, pady=4)
-        btn(btn_frame, "Check .444 File Status",
-            self._check_status,         "TButton").grid(row=1, column=1, padx=4, pady=4)
 
+        ttk.Separator(f2).pack(fill="x", pady=10)
+
+        # ── CSV Templates ─────────────────────────────────────────────────────
+        ttk.Label(f2, text="Download CSV Templates", font=("Calibri", 10, "bold")).pack(anchor="w", pady=(0, 4))
+        ttk.Label(f2,
+                  text="Download a blank template to see the required columns and format for each record type.",
+                  foreground=MUTED).pack(anchor="w", pady=(0, 6))
+        tpl_frm = ttk.Frame(f2)
+        tpl_frm.pack(anchor="w")
+        btn(tpl_frm, "⬇  Patients Template",
+            self._download_patients_template, "TButton").grid(row=0, column=0, padx=4, pady=4)
+        btn(tpl_frm, "⬇  Sessions Template",
+            self._download_sessions_template, "TButton").grid(row=0, column=1, padx=4, pady=4)
+        btn(tpl_frm, "⬇  Billing Template",
+            self._download_billing_template,  "TButton").grid(row=0, column=2, padx=4, pady=4)
+
+        ttk.Separator(f2).pack(fill="x", pady=10)
+
+        ttk.Label(f2, text="Import Log", font=("Calibri", 10, "bold")).pack(anchor="w", pady=(0, 2))
         self._import_log = tk.Text(f2, height=10, font=FONT_MONO, state="disabled",
                                    relief="solid", borderwidth=1, background="#fafafa")
-        self._import_log.pack(fill="both", expand=True, pady=(10, 0))
+        self._import_log.pack(fill="both", expand=True)
 
     def show_provider_profile(self):
         if hasattr(self, "_nb"):
@@ -3503,31 +3519,44 @@ class SettingsTab(ttk.Frame):
         self._refresh_app_views(billing=True)
         messagebox.showinfo("Import Complete", f"Imported {count} billing records.\n{len(warns)} warnings.")
 
-    def _raw_extract(self):
-        path = filedialog.askopenfilename(
-            title="Select PTInfo.444 from H: drive",
-            initialdir=r"H:\Important Files",
-            filetypes=[("444 Database","*.444"),("All","*.*")])
+    def _download_patients_template(self):
+        path = filedialog.asksaveasfilename(
+            title="Save Patients CSV Template",
+            initialfile="patients_template.csv",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All", "*.*")])
         if not path:
             return
         import migration
-        count, warns = migration.extract_raw_patients(path)
-        self._log(f"Raw extraction: {count} records")
-        for w in warns[:20]:
-            self._log(f"  {w}")
-        self._refresh_app_views(patients=True, select_tab=0)
-        messagebox.showinfo("Extraction Complete",
-                            f"Extracted {count} records.\nCheck import log for details.")
+        migration.write_patients_template(path)
+        self._log(f"Patients template saved: {path}")
+        messagebox.showinfo("Template Saved", f"Patients CSV template saved to:\n{path}")
 
-    def _check_status(self):
+    def _download_sessions_template(self):
+        path = filedialog.asksaveasfilename(
+            title="Save Sessions CSV Template",
+            initialfile="sessions_template.csv",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All", "*.*")])
+        if not path:
+            return
         import migration
-        statuses = migration.get_data_files_status()
-        self._log("File Status on H: drive:")
-        for f in statuses:
-            exists = "✓" if f["exists"] else "✗"
-            fm5    = "FileMaker Pro 5" if f["is_fm5"] else ("(not FM5)" if f["exists"] else "")
-            self._log(f"  {exists} {f['file']:<35}  {f['size_kb']:>6} KB  {fm5}")
-            self._log(f"    └─ {f['description']}")
+        migration.write_sessions_template(path)
+        self._log(f"Sessions template saved: {path}")
+        messagebox.showinfo("Template Saved", f"Sessions CSV template saved to:\n{path}")
+
+    def _download_billing_template(self):
+        path = filedialog.asksaveasfilename(
+            title="Save Billing CSV Template",
+            initialfile="billing_template.csv",
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All", "*.*")])
+        if not path:
+            return
+        import migration
+        migration.write_billing_template(path)
+        self._log(f"Billing template saved: {path}")
+        messagebox.showinfo("Template Saved", f"Billing CSV template saved to:\n{path}")
 
 
 class VersionManagerDialog(tk.Toplevel):

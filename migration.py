@@ -1,19 +1,23 @@
 """
-TheraTrak Pro – Data migration from Notes 444 (.444 / FileMaker Pro 5) files.
+TheraTrak Pro – Data import from any medical practice management or EHR software.
 
-The .444 files use the FileMaker Pro 5 binary format (magic bytes 00 01 00 00 00 02 00 01 00 05).
-This module offers two import paths:
+Accepts CSV files exported from any system (SimplePractice, Kareo, TherapyNotes,
+Practice Fusion, Notes 444, etc.).  Column names are matched flexibly — exact
+headers are not required.
 
-  1. CSV Import (recommended) – export records from Notes 444 EXE as CSV/tab-delimited,
-     then import via this module.
-  2. Raw string extraction – reads printable ASCII/UTF-8 strings from binary .444 files
-     and attempts to match known field patterns.  Results may be partial.
+Import paths:
+  import_patients_csv(path)  – patient demographics & insurance
+  import_sessions_csv(path)  – therapy session notes
+  import_billing_csv(path)   – billing / payment records
 
-Supported source files:
-  PTInfo.444          → patients table
-  PtNotes.444         → session_notes table
-  Payments.444        → billing_records table
-  ContactInformation.444 → patient contacts (merged into patients)
+Template generators (blank CSV with correct headers):
+  write_patients_template(path)
+  write_sessions_template(path)
+  write_billing_template(path)
+
+Legacy Notes 444 binary extraction (best-effort, partial data only):
+  extract_raw_patients(ptinfo_path)
+  get_data_files_status([notes444_dir])
 """
 
 import csv
@@ -415,7 +419,107 @@ def extract_raw_patients(ptinfo_path: str) -> tuple[int, list[str]]:
     return imported, warnings
 
 
-# ─── Guided import report ─────────────────────────────────────────────────────
+# ─── CSV Template Writers ─────────────────────────────────────────────────────
+
+def write_patients_template(path: str) -> None:
+    """Write a blank patients CSV template with all supported column headers."""
+    headers = [
+        "Last Name", "First Name", "Middle Name",
+        "DOB",
+        "Sex",
+        "SSN",
+        "Address", "City", "State", "Zip",
+        "Phone Home", "Phone Cell", "Phone Work",
+        "Email",
+        "Insurance", "Ins ID", "Ins Group", "Ins Plan", "Ins Holder", "Ins Relation",
+        "Dx1", "Dx2", "Dx3", "Dx4",
+        "Intake Date",
+        "Status",
+        "Notes",
+    ]
+    example = [
+        "Smith", "Jane", "",
+        "01/15/1985",
+        "F",
+        "",
+        "123 Main St", "Springfield", "IL", "62701",
+        "(217) 555-1234", "(217) 555-5678", "",
+        "jane.smith@email.com",
+        "BlueCross BlueShield", "XYZ123456", "GRP001", "", "Jane Smith", "Self",
+        "F32.1", "", "", "",
+        "03/01/2024",
+        "Active",
+        "",
+    ]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerow(example)
+
+
+def write_sessions_template(path: str) -> None:
+    """Write a blank sessions CSV template with all supported column headers."""
+    headers = [
+        "Patient ID", "Last Name", "First Name",
+        "Session Date",
+        "Duration",
+        "Session Type",
+        "Place of Service",
+        "CPT Code", "Modifier",
+        "Dx1", "Dx2", "Dx3", "Dx4",
+        "Fee",
+        "Notes",
+        "Goals", "Interventions", "Response", "Plan",
+        "Signed",
+    ]
+    example = [
+        "", "Smith", "Jane",
+        "04/05/2026",
+        "50",
+        "Individual",
+        "11",
+        "90837", "",
+        "F32.1", "", "", "",
+        "150.00",
+        "Patient reported improvement.",
+        "", "", "", "",
+        "No",
+    ]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerow(example)
+
+
+def write_billing_template(path: str) -> None:
+    """Write a blank billing CSV template with all supported column headers."""
+    headers = [
+        "Patient ID", "Last Name", "First Name",
+        "Record Date",
+        "Service Date",
+        "Description",
+        "Charge", "Payment", "Payment Type", "Check Number",
+        "Insurance Payment",
+        "Adjustment",
+        "Claim Number",
+    ]
+    example = [
+        "", "Smith", "Jane",
+        "04/05/2026",
+        "04/05/2026",
+        "Individual Therapy – 90837",
+        "150.00", "30.00", "Copay", "",
+        "120.00",
+        "0.00",
+        "",
+    ]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerow(example)
+
+
+# ─── Guided import report (legacy Notes 444) ──────────────────────────────────
 
 def get_data_files_status(notes444_dir: str = NOTES444_DEFAULT_PATH) -> list[dict]:
     """
