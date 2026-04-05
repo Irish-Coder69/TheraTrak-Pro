@@ -2996,6 +2996,46 @@ class CMS1500Tab(ttk.Frame):
         cv.config(scrollregion=(0, 0, display.width, display.height))
         win._preview_img = preview_img
 
+        # Bind mousewheel scrolling
+        def _on_preview_mousewheel(event):
+            delta = event.delta if hasattr(event, "delta") else 0
+            if delta == 0:
+                return "break"
+            units = -1 if delta > 0 else 1
+            cv.yview_scroll(units, "units")
+            return "break"
+
+        def _on_preview_shift_mousewheel(event):
+            delta = event.delta if hasattr(event, "delta") else 0
+            if delta == 0:
+                return "break"
+            units = -1 if delta > 0 else 1
+            cv.xview_scroll(units, "units")
+            return "break"
+
+        def _on_preview_wheel_up(event):
+            cv.yview_scroll(-1, "units")
+            return "break"
+
+        def _on_preview_wheel_down(event):
+            cv.yview_scroll(1, "units")
+            return "break"
+
+        def _activate_preview_mousewheel(event=None):
+            cv.bind_all("<MouseWheel>", _on_preview_mousewheel)
+            cv.bind_all("<Shift-MouseWheel>", _on_preview_shift_mousewheel)
+            cv.bind_all("<Button-4>", _on_preview_wheel_up)
+            cv.bind_all("<Button-5>", _on_preview_wheel_down)
+
+        def _deactivate_preview_mousewheel(event=None):
+            cv.unbind_all("<MouseWheel>")
+            cv.unbind_all("<Shift-MouseWheel>")
+            cv.unbind_all("<Button-4>")
+            cv.unbind_all("<Button-5>")
+
+        cv.bind("<Enter>", _activate_preview_mousewheel)
+        cv.bind("<Leave>", _deactivate_preview_mousewheel)
+
         def sx(v):
             return int(round(v * scale))
 
