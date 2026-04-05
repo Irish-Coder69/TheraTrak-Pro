@@ -150,6 +150,7 @@ def initialize_db():
         tax_id            TEXT DEFAULT '',
         tax_id_type       TEXT DEFAULT 'EIN',
         upin              TEXT DEFAULT '',
+        id_qualifier      TEXT DEFAULT 'ZZ',
         license_num       TEXT DEFAULT '',
         address           TEXT DEFAULT '',
         address2          TEXT DEFAULT '',
@@ -209,6 +210,7 @@ def initialize_db():
     conn.close()
 
     _migrate_users_table()
+    _migrate_provider_settings_table()
     _seed_dsm_codes()
 
 
@@ -230,6 +232,21 @@ def _migrate_users_table():
     for col, col_def in new_columns:
         if col not in existing:
             cur.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+    conn.commit()
+    conn.close()
+
+
+def _migrate_provider_settings_table():
+    """Add any missing columns to provider_settings (forward migration)."""
+    new_columns = [
+        ("id_qualifier", "TEXT DEFAULT 'ZZ'"),
+    ]
+    conn = get_connection()
+    cur = conn.cursor()
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(provider_settings)").fetchall()}
+    for col, col_def in new_columns:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE provider_settings ADD COLUMN {col} {col_def}")
     conn.commit()
     conn.close()
 
@@ -595,9 +612,9 @@ def create_user(data: dict):
     cur.execute(
         """INSERT INTO users
            (username, password_hash, password_salt, first_name, middle_name, last_name, suffix, email,
-            phone, role, address, city, state, zip, license_number, npi_number,
+                                phone, role, address, city, state, zip, license_number, npi_number,
             billing_address, billing_city, billing_state, billing_zip, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
         (
             username,
             password_hash,

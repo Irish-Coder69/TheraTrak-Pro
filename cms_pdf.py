@@ -558,6 +558,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
     patient_phone = g(patient, "phone_home") or g(patient, "phone_cell") or g(patient, "phone_work")
     facility_city_state_zip = f"{g(provider,'city')} {g(provider,'state')} {g(provider,'zip')}".strip()
     billing_city_state_zip = facility_city_state_zip
+    provider_id_qualifier = g(provider, "id_qualifier", "ZZ")
 
     fd = {
         "ins_type":       "",
@@ -611,12 +612,16 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "facility_name":  g(provider, "practice_name") or f"{g(provider,'provider_first')} {g(provider,'provider_last')}".strip(),
         "facility_address": g(provider, "address"),
         "facility_city_state_zip": facility_city_state_zip,
+        "facility_qualifier": provider_id_qualifier,
         "facility_npi":   g(provider, "npi"),
+        "facility_other_id": g(provider, "license_num"),
         "billing_name":   f"{g(provider,'practice_name') or g(provider,'provider_last')+', '+g(provider,'provider_first')}",
         "billing_address":g(provider, "address"),
         "billing_city_state_zip": billing_city_state_zip,
         "billing_phone":  g(provider, "phone"),
+        "billing_qualifier": provider_id_qualifier,
         "billing_npi":    g(provider, "npi"),
+        "billing_other_id": g(provider, "license_num"),
     }
 
     relation = str(fd.get("ins_relation", "") or "").strip().lower()

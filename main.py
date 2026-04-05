@@ -380,7 +380,7 @@ class UserDirectoryDialog(tk.Toplevel):
             return
         self._edit_uid = uid
         for key in ("username", "first_name", "middle_name", "last_name", "suffix",
-                    "email", "phone", "role", "license_number", "npi_number",
+            "email", "phone", "role", "license_number", "npi_number",
                     "address", "city", "state", "zip",
                     "billing_address", "billing_city", "billing_state", "billing_zip"):
             self._vars[key].set(str(row[key] or ""))
@@ -3337,6 +3337,7 @@ class SettingsTab(ttk.Frame):
 
     def _build(self):
         nb = ttk.Notebook(self)
+        self._nb = nb
         nb.pack(fill="both", expand=True, padx=8, pady=8)
 
         # ── Provider / Practice ───────────────────────────────────────────────
@@ -3352,16 +3353,17 @@ class SettingsTab(ttk.Frame):
             ("NPI",                    "npi",            2, 2),
             ("Tax ID",                 "tax_id",         3, 0),
             ("Tax ID Type (EIN/SSN)",  "tax_id_type",    3, 2),
-            ("UPIN (legacy)",          "upin",           4, 0),
+            ("ID Qualifier",           "id_qualifier",   4, 0),
             ("Taxonomy Codes",         "license_num",    4, 2),
-            ("Address",                "address",        5, 0),
-            ("City",                   "city",           6, 0),
-            ("State",                  "state",          6, 2),
-            ("Zip",                    "zip",            7, 0),
-            ("Phone",                  "phone",          7, 2),
-            ("Fax",                    "fax",            8, 0),
-            ("Email",                  "email",          8, 2),
-            ("Default POS",            "default_pos",    9, 0),
+            ("UPIN (legacy)",          "upin",           5, 0),
+            ("Address",                "address",        6, 0),
+            ("City",                   "city",           7, 0),
+            ("State",                  "state",          7, 2),
+            ("Zip",                    "zip",            8, 0),
+            ("Phone",                  "phone",          8, 2),
+            ("Fax",                    "fax",            9, 0),
+            ("Email",                  "email",          9, 2),
+            ("Default POS",            "default_pos",   10, 0),
         ]
         for lbl, key, r, c in fields:
             ttk.Label(f1, text=lbl).grid(row=r, column=c, sticky="e", padx=4, pady=3)
@@ -3370,11 +3372,11 @@ class SettingsTab(ttk.Frame):
 
         self.accept_var = tk.IntVar(value=1)
         ttk.Checkbutton(f1, text="Accept Assignment (Medicare/Medicaid)",
-                        variable=self.accept_var).grid(row=10, column=0, columnspan=4,
+                        variable=self.accept_var).grid(row=11, column=0, columnspan=4,
                                                         sticky="w", padx=4, pady=4)
 
         btn(f1, "Save Provider Settings", self._save_provider, "Accent.TButton"
-            ).grid(row=11, column=0, columnspan=2, pady=10, padx=4, sticky="w")
+            ).grid(row=12, column=0, columnspan=2, pady=10, padx=4, sticky="w")
 
         # ── Data Import ───────────────────────────────────────────────────────
         f2 = ttk.Frame(nb, padding=14)
@@ -3415,6 +3417,10 @@ class SettingsTab(ttk.Frame):
         self._import_log = tk.Text(f2, height=10, font=FONT_MONO, state="disabled",
                                    relief="solid", borderwidth=1, background="#fafafa")
         self._import_log.pack(fill="both", expand=True, pady=(10, 0))
+
+    def show_provider_profile(self):
+        if hasattr(self, "_nb"):
+            self._nb.select(0)
 
     def _load(self):
         prov = db.get_provider()
@@ -3685,6 +3691,7 @@ class TheraTrakApp(tk.Tk):
         file_menu.add_command(label="New Session",    command=lambda: SessionDialog(self, on_save=lambda _: self.tab_sessions.refresh()))
         file_menu.add_separator()
         file_menu.add_command(label="User Directory", command=self._open_user_directory)
+        file_menu.add_command(label="Provider Profile", command=self._open_provider_profile)
         file_menu.add_separator()
         file_menu.add_command(label="Backup Database", command=self._backup_db)
         file_menu.add_separator()
@@ -3699,10 +3706,12 @@ class TheraTrakApp(tk.Tk):
         nav_menu.add_command(label="CMS-1500",        command=lambda: self.nb.select(3))
         nav_menu.add_command(label="Reports",         command=lambda: self.nb.select(4))
         nav_menu.add_command(label="Settings/Import", command=lambda: self.nb.select(5))
+        nav_menu.add_command(label="Provider Profile", command=self._open_provider_profile)
         menubar.add_cascade(label="Navigate", menu=nav_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="Check for Updates", command=self._check_for_updates)
+        help_menu.add_command(label="User Guide", command=self._open_user_guide)
         help_menu.add_command(label="About TheraTrak Pro", command=self._about)
         menubar.add_cascade(label="Help", menu=help_menu)
 
@@ -3728,6 +3737,11 @@ class TheraTrakApp(tk.Tk):
     def _open_user_directory(self):
         UserDirectoryDialog(self)
 
+    def _open_provider_profile(self):
+        self.nb.select(5)
+        if hasattr(self, "tab_settings"):
+            self.tab_settings.show_provider_profile()
+
     def _logout(self):
         if not messagebox.askyesno("Logout", "Are you sure you want to log out?", parent=self):
             return
@@ -3751,6 +3765,33 @@ class TheraTrakApp(tk.Tk):
         if dest:
             copy2(db.DB_PATH, dest)
             messagebox.showinfo("Backup", f"Database backed up to:\n{dest}")
+
+    def _open_user_guide(self):
+        guide_path = APP_ROOT / "USER_GUIDE.md"
+        if not guide_path.exists():
+            messagebox.showerror("User Guide", f"User guide file not found:\n{guide_path}")
+            return
+        try:
+            content = guide_path.read_text(encoding="utf-8")
+        except OSError as ex:
+            messagebox.showerror("User Guide", f"Could not read user guide:\n{ex}")
+            return
+
+        win = tk.Toplevel(self)
+        apply_window_icon(win)
+        win.title("TheraTrak Pro User Guide")
+        win.geometry("980x760")
+        win.minsize(760, 560)
+
+        frm = ttk.Frame(win, padding=10)
+        frm.pack(fill="both", expand=True)
+        txt = tk.Text(frm, wrap="word", font=FONT_UI, relief="solid", borderwidth=1)
+        sb = ttk.Scrollbar(frm, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        txt.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        txt.insert("1.0", content)
+        txt.configure(state="disabled")
 
     def _about(self):
         user_line = ""
