@@ -564,8 +564,6 @@ def cms_form_data_from_patient(patient, sessions, provider):
         epsdt_value = ""
         if i == 1:
             epsdt_value = taxonomy_codes
-        elif i == 5:
-            epsdt_value = referring_provider_taxonomy_codes
         elif i == 6:
             epsdt_value = provider_id_qualifier
         service_lines.append({
@@ -637,6 +635,7 @@ def cms_form_data_from_patient(patient, sessions, provider):
         "total_charge":   total_charge,
         "amount_paid":    0.0,
         "provider_sig":   " ".join(filter(None, [g(provider, "provider_first"), g(provider, "provider_last"), g(provider, "provider_suffix")])) or "Signature on File",
+        "provider_sig_date": date.today().strftime("%m %d %y"),
         "billing_date":   taxonomy_codes,
         "facility_name":  g(provider, "practice_name") or f"{g(provider,'provider_first')} {g(provider,'provider_last')}".strip(),
         "facility_address": g(provider, "address"),
