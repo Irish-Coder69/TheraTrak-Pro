@@ -1848,7 +1848,7 @@ class CMS1500Tab(ttk.Frame):
             "unable_to": [13, 70],
             "ins_sig": [49, 92],
             "add_info": [15, 47],
-            "ref_provider": [11, 55],
+            "ref_provider": [28, 55],
             "illness_date": [15, 67],
             "illness_qual": [59, 66],
             "ref_npi": [40, 57],
