@@ -324,7 +324,7 @@ class UserDirectoryDialog(tk.Toplevel):
 
         # ── Contact
         fe2("Email:", "email", "Phone:", "phone", 6)
-        fe2("License #:", "license_number", "NPI #:", "npi_number", 7)
+        fe2("Taxonomy Codes:", "license_number", "NPI #:", "npi_number", 7)
 
         ttk.Separator(form, orient="horizontal").grid(row=8, column=0, columnspan=6, sticky="ew", pady=6)
 
@@ -561,8 +561,8 @@ class CreateAccountDialog(tk.Toplevel):
         _bz.grid(row=13, column=4, sticky="w")
         self._billing_widgets["billing_zip"] = _bz
 
-        # ── License / NPI ─────────────────────────────────────────
-        ttk.Label(frm, text="License Number*").grid(row=13, column=0, sticky="e", padx=4, pady=4)
+        # ── Taxonomy / NPI ───────────────────────────────────────
+        ttk.Label(frm, text="Taxonomy Codes*").grid(row=13, column=0, sticky="e", padx=4, pady=4)
         _e_license = ttk.Entry(frm, textvariable=self._field("license_number"), width=24)
         _e_license.grid(row=13, column=1, sticky="w")
 
@@ -3353,7 +3353,7 @@ class SettingsTab(ttk.Frame):
             ("Tax ID",                 "tax_id",         3, 0),
             ("Tax ID Type (EIN/SSN)",  "tax_id_type",    3, 2),
             ("UPIN (legacy)",          "upin",           4, 0),
-            ("License Number",         "license_num",    4, 2),
+            ("Taxonomy Codes",         "license_num",    4, 2),
             ("Address",                "address",        5, 0),
             ("City",                   "city",           6, 0),
             ("State",                  "state",          6, 2),
