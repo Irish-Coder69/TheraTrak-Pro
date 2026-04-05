@@ -3767,9 +3767,14 @@ class TheraTrakApp(tk.Tk):
             messagebox.showinfo("Backup", f"Database backed up to:\n{dest}")
 
     def _open_user_guide(self):
-        guide_path = APP_ROOT / "USER_GUIDE.md"
-        if not guide_path.exists():
-            messagebox.showerror("User Guide", f"User guide file not found:\n{guide_path}")
+        guide_candidates = [
+            APP_ROOT / "USER_GUIDE.md",
+            ASSETS_DIR / "USER_GUIDE.md",
+        ]
+        guide_path = next((p for p in guide_candidates if p.exists()), None)
+        if not guide_path:
+            looked_in = "\n".join(str(p) for p in guide_candidates)
+            messagebox.showerror("User Guide", f"User guide file not found.\n\nLooked in:\n{looked_in}")
             return
         try:
             content = guide_path.read_text(encoding="utf-8")
