@@ -2151,6 +2151,7 @@ class CMS1500Tab(ttk.Frame):
         btn(act, "Auto-Populate from Patient",  self._auto_populate).pack(side="left", padx=4)
         btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
         btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
+        btn(act, "Print",                       self._print_pdf).pack(side="left", padx=4)
         btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
 
         self._refresh_claims()
@@ -2909,6 +2910,37 @@ class CMS1500Tab(ttk.Frame):
                 "Could not generate PDF.\n"
                 "Make sure 'reportlab' is installed:\n"
                 "  pip install reportlab")
+
+    def _print_pdf(self):
+        from cms_pdf import build_cms1500_pdf
+
+        fd = self._collect_form_data()
+        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", fd.get("patient_name", "claim") or "claim").strip("_")
+        if not safe_name:
+            safe_name = "claim"
+        temp_dir = APP_ROOT / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        path = temp_dir / f"CMS1500_{safe_name}_print.pdf"
+
+        ok = build_cms1500_pdf(str(path), fd)
+        if not ok:
+            messagebox.showerror(
+                "Error",
+                "Could not generate PDF for printing.\n"
+                "Make sure 'reportlab' is installed:\n"
+                "  pip install reportlab",
+            )
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(path), "print")
+                messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
+            else:
+                webbrowser.open(path.as_uri())
+                messagebox.showinfo("Print", f"Opened print PDF:\n{path}")
+        except OSError as ex:
+            messagebox.showerror("Print", f"Could not print CMS-1500:\n{ex}")
 
     def _preview_print(self):
         fd = self._collect_form_data()
