@@ -35,7 +35,7 @@ FONT_BOLD = "Helvetica-Bold"
 FONT_SM = 7
 FONT_MD = 8
 FONT_LG = 10
-PDF_TEXT_Y_NUDGE_PX = 2.0
+PDF_TEXT_Y_NUDGE_PX = 3.5
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
