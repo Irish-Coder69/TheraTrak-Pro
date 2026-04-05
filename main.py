@@ -68,8 +68,33 @@ GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/
 UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
 STARTUP_LOG_FILE = APP_ROOT / "startup.log"
 
+# Build lookup mapping for place of service codes
+_PLACE_CODE_MAP = {p[0]: p[1] for p in PLACE_CODES}
+_PLACE_CODE_REVERSE = {p[1]: p[0] for p in PLACE_CODES}
+
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
+
+def _extract_place_code(place_value: str) -> str:
+    """Extract place of service code from display format or return code if already code."""
+    if not place_value:
+        return "11"
+    # If it's a full display format like "11 – Office", extract just the code
+    if place_value in _PLACE_CODE_MAP:
+        return _PLACE_CODE_MAP[place_value]
+    # If it's already a code, return it
+    return place_value
+
+
+def _get_place_display(place_code: str) -> str:
+    """Get display format for place of service code, or return code if not found."""
+    if not place_code:
+        return "11 – Office"
+    # If it's a code like "11", get the display format
+    if place_code in _PLACE_CODE_REVERSE:
+        return _PLACE_CODE_REVERSE[place_code]
+    # If it's already a display format, return it
+    return place_code
 
 def _append_startup_log(message: str):
     try:
@@ -2697,13 +2722,21 @@ class CMS1500Tab(ttk.Frame):
         self._apply_relation_checkboxes(fd)
         for fld, var in self._cv.items():
             if fld in fd:
-                var.set(str(fd[fld]) if fd[fld] is not None else "")
+                value = fd[fld]
+                # Convert place_of_service code back to display format for UI
+                if fld == "place_of_service":
+                    value = _get_place_display(str(value) if value is not None else "")
+                var.set(str(value) if value is not None else "")
         # Service lines
         sls = fd.get("service_lines", [])
         for i, sl_vars in enumerate(self._sl_vars):
             sl = sls[i] if i < len(sls) else {}
             for key, var in sl_vars.items():
-                var.set(str(sl.get(key, "")) if sl.get(key) is not None else "")
+                value = sl.get(key, "")
+                # Convert place_of_service code back to display format for UI
+                if key == "place_of_service":
+                    value = _get_place_display(str(value) if value is not None else "")
+                var.set(str(value) if value is not None else "")
         self._current_pid = pid
         self._current_sessions = sessions
 
@@ -2765,10 +2798,14 @@ class CMS1500Tab(ttk.Frame):
 
     def _collect_form_data(self):
         fd = {k: v.get().strip() for k, v in self._cv.items()}
+        # Extract just the place of service code from display format if needed
+        fd["place_of_service"] = _extract_place_code(fd.get("place_of_service", "11"))
         fd["service_lines"] = []
         for sl in self._sl_vars:
             entry = {k: v.get().strip() for k, v in sl.items()}
             if any(entry.values()):
+                # Also extract place code for each service line
+                entry["place_of_service"] = _extract_place_code(entry.get("place_of_service", "11"))
                 fd["service_lines"].append(entry)
         fd["alignment_offsets"] = {
             "section_offsets": {
