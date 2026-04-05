@@ -82,10 +82,10 @@ _PLACE_CODE_REVERSE = {p[1]: p[0] for p in PLACE_CODES}
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
 
-def _extract_place_code(place_value: str) -> str:
+def _extract_place_code(place_value: str, default: str = "11") -> str:
     """Extract place of service code from display format or return code if already code."""
     if not place_value:
-        return "11"
+        return default
     # If it's a full display format like "11 – Office", extract just the code
     if place_value in _PLACE_CODE_MAP:
         return _PLACE_CODE_MAP[place_value]
@@ -2787,7 +2787,7 @@ class CMS1500Tab(ttk.Frame):
             for key, var in sl_vars.items():
                 value = sl.get(key, "")
                 if key == "pos":
-                    value = _extract_place_code(str(value) if value is not None else "")
+                    value = _extract_place_code(str(value) if value is not None else "", default="")
                 var.set(str(value) if value is not None else "")
         self._current_pid = pid
         self._current_sessions = sessions
@@ -2863,7 +2863,7 @@ class CMS1500Tab(ttk.Frame):
             entry = {k: v.get().strip() for k, v in sl.items()}
             if any(entry.values()):
                 # Service line POS is stored under "pos".
-                entry["pos"] = _extract_place_code(entry.get("pos", "11"))
+                entry["pos"] = _extract_place_code(entry.get("pos", ""), default="")
                 fd["service_lines"].append(entry)
         fd["alignment_offsets"] = {
             "section_offsets": {

@@ -64,7 +64,7 @@ def _checkbox(c, x, y, checked=False, label=""):
         c.drawString(x + sz + 2, y + 1, label)
 
 
-def _normalize_pos(value, default="11"):
+def _normalize_pos(value, default=""):
     text = str(value or "").strip()
     if not text:
         return default
