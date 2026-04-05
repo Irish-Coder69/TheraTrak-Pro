@@ -211,9 +211,25 @@ def initialize_db():
     conn.commit()
     conn.close()
 
+    _migrate_patients_table()
     _migrate_users_table()
     _migrate_provider_settings_table()
     _seed_dsm_codes()
+
+
+def _migrate_patients_table():
+    """Add any missing columns to patients (forward migration)."""
+    new_columns = [
+        ("sig_on_file_date", "TEXT DEFAULT ''"),
+    ]
+    conn = get_connection()
+    cur = conn.cursor()
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(patients)").fetchall()}
+    for col, col_def in new_columns:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE patients ADD COLUMN {col} {col_def}")
+    conn.commit()
+    conn.close()
 
 
 def _migrate_users_table():

@@ -1018,7 +1018,11 @@ class PatientDialog(tk.Toplevel):
         data["notes"] = self._notesbox.get("1.0", "end-1c")
         if self.pid:
             data["id"] = self.pid
-        pid = db.save_patient(data)
+        try:
+            pid = db.save_patient(data)
+        except Exception as ex:
+            messagebox.showerror("Save Error", f"Could not save patient:\n{ex}", parent=self)
+            return
         if self.on_save:
             self.on_save(pid)
         self.destroy()
