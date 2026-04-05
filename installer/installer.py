@@ -20,6 +20,7 @@ APP_BUNDLE_DIR = "app"
 UNINSTALL_CMD = "Uninstall TheraTrak Pro.cmd"
 ICON_FILE = "Theratrak-Pro.ico"
 VERSION_FILE = "version.json"
+PYTHON_DLL_REL = Path("_internal") / "python311.dll"
 LEGACY_START_MENU_FOLDERS = ("Thorough Track Pro", "TheraTrak-Pro")
 LEGACY_ROOT_SHORTCUTS = ("TheraTrak Pro.lnk", "Uninstall TheraTrak Pro.lnk")
 
@@ -43,7 +44,10 @@ def _copy_with_retries(src: Path, dst: Path, attempts: int = 8) -> None:
         try:
             if src.is_dir():
                 if dst.exists():
-                    shutil.rmtree(dst, ignore_errors=True)
+                    if dst.is_dir() and not dst.is_symlink():
+                        shutil.rmtree(dst, ignore_errors=True)
+                    else:
+                        dst.unlink(missing_ok=True)
                 shutil.copytree(src, dst)
             else:
                 shutil.copy2(src, dst)
@@ -245,6 +249,16 @@ def main() -> int:
     _stop_running_app()
 
     app_bundle = source / APP_BUNDLE_DIR
+    source_python_dll = app_bundle / PYTHON_DLL_REL
+    if not source_python_dll.exists():
+        messagebox.showerror(
+            APP_NAME,
+            "Install failed. Installer payload is incomplete (missing _internal\\python311.dll).\n"
+            "Please download the installer again.",
+        )
+        root.destroy()
+        return 1
+
     if app_bundle.exists() and app_bundle.is_dir():
         for item in app_bundle.iterdir():
             destination = target / item.name
@@ -258,12 +272,22 @@ def main() -> int:
     exe_path = target / APP_EXE
     uninstaller_path = target / UNINSTALL_EXE
     icon_path = target / ICON_FILE
+    target_python_dll = target / PYTHON_DLL_REL
     uninstall_cmd_path = target / UNINSTALL_CMD
 
-    missing = [
-        p.name for p in (exe_path, uninstaller_path, icon_path)
-        if not p.exists()
+    # Extra safeguard: if the runtime DLL is still missing, try one focused recopy.
+    if not target_python_dll.exists():
+        src_internal = app_bundle / "_internal"
+        if src_internal.exists() and src_internal.is_dir():
+            _copy_with_retries(src_internal, target / "_internal")
+
+    required = [
+        (APP_EXE, exe_path),
+        (UNINSTALL_EXE, uninstaller_path),
+        (ICON_FILE, icon_path),
+        (str(PYTHON_DLL_REL).replace("/", "\\"), target_python_dll),
     ]
+    missing = [label for label, p in required if not p.exists()]
     if missing:
         messagebox.showerror(APP_NAME, f"Install failed. Missing files: {', '.join(missing)}")
         root.destroy()
