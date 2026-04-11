@@ -1798,7 +1798,6 @@ class CMS1500Tab(ttk.Frame):
         btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
         btn(tb, "Print", self._print_form).pack(side="left", padx=4)
         btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
-        btn(tb, "Template Fields", self._show_template_fields).pack(side="left", padx=4)
 
         frm = lframe(self, "CMS-1500 Paper Form")
         frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
