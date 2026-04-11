@@ -6,6 +6,7 @@ Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 """
 
 import json
+import io
 import os
 import re
 import shutil
@@ -1736,40 +1737,7 @@ class BillingTab(ttk.Frame):
 class CMS1500Tab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        self._vars = {}
-        self._current_pid = None
-        self._current_sessions = []
-        self._current_data = {}
-        self._last_preview_path = None
-        self._build()
-
-    def _build(self):
-        tb = ttk.Frame(self, padding=(8, 6))
-        tb.pack(fill="x")
-        btn(tb, "Auto-Populate from Patient", self._auto_populate, "Accent.TButton").pack(side="left", padx=4)
-        btn(tb, "Open Blank Paper Form", self._open_blank_template).pack(side="left", padx=4)
-        btn(tb, "Open Filled Paper Form", self._refresh_paper_preview).pack(side="left", padx=4)
-        btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
-        btn(tb, "Print", self._print_form).pack(side="left", padx=4)
-        btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
-        btn(tb, "Template Fields", self._show_template_fields).pack(side="left", padx=4)
-
-        frm = lframe(self, "CMS-1500 Data")
-        frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-
-        ttk.Label(
-            frm,
-            text=(
-                "Paper form mode: use 'Open Blank Paper Form' to view the exact CMS-1500 layout, "
-                "or 'Open Filled Paper Form' to see current data on that same template."
-            ),
-            foreground=ACCENT,
-            wraplength=1000,
-            justify="left",
-            font=("Calibri", 10, "bold"),
-        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=6, pady=(4, 8))
-
-        fields = [
+        self._field_defs = [
             ("Patient Name", "patient_name"),
             ("Patient DOB", "patient_dob"),
             ("Patient Sex", "patient_sex"),
@@ -1802,34 +1770,131 @@ class CMS1500Tab(ttk.Frame):
             ("Facility State", "facility_state"),
             ("Facility ZIP", "facility_zip"),
         ]
+        self._vars = {}
+        self._current_pid = None
+        self._current_sessions = []
+        self._current_data = {}
+        self._last_preview_path = None
+        self._paper_image = None
+        self._build()
 
+    def _build(self):
+        tb = ttk.Frame(self, padding=(8, 6))
+        tb.pack(fill="x")
+        btn(tb, "Auto-Populate from Patient", self._auto_populate, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "Show Blank Form", self._open_blank_template).pack(side="left", padx=4)
+        btn(tb, "Refresh Filled Form", self._refresh_paper_preview).pack(side="left", padx=4)
+        btn(tb, "Edit Form Data", self._open_data_editor).pack(side="left", padx=4)
+        btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
+        btn(tb, "Print", self._print_form).pack(side="left", padx=4)
+        btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
+        btn(tb, "Template Fields", self._show_template_fields).pack(side="left", padx=4)
+
+        frm = lframe(self, "CMS-1500 Paper Form")
+        frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        ttk.Label(
+            frm,
+            text="This is the actual CMS-1500 template rendered in-app. Use 'Edit Form Data' for manual overrides.",
+            foreground=ACCENT,
+            justify="left",
+            font=("Calibri", 10, "bold"),
+        ).pack(anchor="w", padx=6, pady=(4, 6))
+
+        for _, key in self._field_defs:
+            self._vars[key] = tk.StringVar()
+
+        view_wrap = ttk.Frame(frm)
+        view_wrap.pack(fill="both", expand=True, padx=6, pady=(0, 6))
+
+        self._paper_canvas = tk.Canvas(view_wrap, background="#dddddd", highlightthickness=0)
+        vbar = ttk.Scrollbar(view_wrap, orient="vertical", command=self._paper_canvas.yview)
+        hbar = ttk.Scrollbar(view_wrap, orient="horizontal", command=self._paper_canvas.xview)
+        self._paper_canvas.configure(yscrollcommand=vbar.set, xscrollcommand=hbar.set)
+        self._paper_canvas.grid(row=0, column=0, sticky="nsew")
+        vbar.grid(row=0, column=1, sticky="ns")
+        hbar.grid(row=1, column=0, sticky="ew")
+        view_wrap.rowconfigure(0, weight=1)
+        view_wrap.columnconfigure(0, weight=1)
+
+        self._paper_status = ttk.Label(frm, text="Loading CMS-1500 template...", foreground=MUTED)
+        self._paper_status.pack(anchor="w", padx=6, pady=(0, 4))
+
+        self.after(120, self._open_blank_template)
+
+    def _open_data_editor(self):
+        win = tk.Toplevel(self)
+        apply_window_icon(win)
+        win.title("CMS-1500 Data Editor")
+        win.geometry("980x700")
+        win.transient(self.winfo_toplevel())
+
+        body = ttk.Frame(win, padding=10)
+        body.pack(fill="both", expand=True)
         for col in (1, 3):
-            frm.columnconfigure(col, weight=1)
+            body.columnconfigure(col, weight=1)
 
-        for idx, (label, key) in enumerate(fields):
+        for idx, (label, key) in enumerate(self._field_defs):
             row = idx // 2
             col_base = (idx % 2) * 2
-            row = row + 1
-            ttk.Label(frm, text=label).grid(row=row, column=col_base, sticky="e", padx=(4, 2), pady=3)
-            var = tk.StringVar()
-            self._vars[key] = var
-            ttk.Entry(frm, textvariable=var).grid(row=row, column=col_base + 1, sticky="ew", padx=(0, 8), pady=3)
+            ttk.Label(body, text=label).grid(row=row, column=col_base, sticky="e", padx=(4, 2), pady=3)
+            ttk.Entry(body, textvariable=self._vars[key]).grid(row=row, column=col_base + 1, sticky="ew", padx=(0, 8), pady=3)
+
+        foot = ttk.Frame(win, padding=(10, 0, 10, 10))
+        foot.pack(fill="x")
+
+        def apply_and_refresh():
+            # Keep any structured service lines while reflecting edited scalar values.
+            self._current_data.update({k: v.get().strip() for k, v in self._vars.items()})
+            self._refresh_paper_preview()
+            win.destroy()
+
+        btn(foot, "Apply + Refresh Form", apply_and_refresh, "Accent.TButton").pack(side="right", padx=4)
+        btn(foot, "Cancel", win.destroy).pack(side="right", padx=4)
+
+    def _render_pdf_in_canvas(self, pdf_path: Path) -> bool:
+        try:
+            import fitz
+            from PIL import Image, ImageTk
+        except Exception:
+            self._paper_status.config(
+                text=(
+                    "In-app PDF view requires PyMuPDF and Pillow. "
+                    "Install with: pip install pymupdf pillow"
+                ),
+                foreground=DANGER,
+            )
+            return False
+
+        try:
+            doc = fitz.open(str(pdf_path))
+            page = doc.load_page(0)
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.65, 1.65), alpha=False)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            self._paper_image = ImageTk.PhotoImage(img)
+            self._paper_canvas.delete("all")
+            self._paper_canvas.create_image(0, 0, image=self._paper_image, anchor="nw")
+            self._paper_canvas.configure(scrollregion=(0, 0, img.width, img.height))
+            self._paper_status.config(text=f"Showing form: {pdf_path.name}", foreground=MUTED)
+            doc.close()
+            return True
+        except Exception as ex:
+            self._paper_status.config(text=f"Could not render CMS form in app: {ex}", foreground=DANGER)
+            return False
 
     def _open_blank_template(self):
         if not self._ensure_template():
             return
-        try:
-            webbrowser.open(CMS_TEMPLATE_FILE.resolve().as_uri())
-        except Exception as ex:
-            messagebox.showerror("CMS-1500", f"Could not open template:\n{ex}")
+        self._render_pdf_in_canvas(CMS_TEMPLATE_FILE)
 
     def _refresh_paper_preview(self):
         preview_path = APP_ROOT / "temp" / "CMS1500_live_paper_preview.pdf"
         saved = self._fill_to_path(preview_path)
         if not saved:
-            return
+            return None
         self._last_preview_path = saved
-        webbrowser.open(saved.resolve().as_uri())
+        self._render_pdf_in_canvas(saved)
+        return saved
 
     def _ensure_template(self) -> bool:
         if CMS_TEMPLATE_FILE.exists():
@@ -2021,6 +2086,7 @@ class CMS1500Tab(ttk.Frame):
         self._current_pid = pid
         self._current_sessions = sessions
         self._current_data = data  # retained for PDF fill
+        self._refresh_paper_preview()
 
     def _show_template_fields(self):
         if not self._ensure_template():
@@ -2054,7 +2120,10 @@ class CMS1500Tab(ttk.Frame):
             messagebox.showinfo("Exported", f"PDF saved to:\n{saved}")
 
     def _print_preview(self):
-        self._refresh_paper_preview()
+        saved = self._refresh_paper_preview()
+        if not saved:
+            return
+        webbrowser.open(saved.resolve().as_uri())
 
     def _print_form(self):
         print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
