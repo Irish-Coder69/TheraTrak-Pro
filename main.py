@@ -1616,6 +1616,7 @@ class BillingTab(ttk.Frame):
             "id", "patient_name", "record_date", "description", "charge", "payment",
             "ins_payment", "adjustment", "balance", "payment_type",
         )
+        self.tv = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
         hdrs = [
             ("ID", 40), ("Patient", 160), ("Date", 90), ("Description", 160),
             ("Charge", 80), ("Pt Paid", 75), ("Ins Paid", 75), ("Adj", 70),
