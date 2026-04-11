@@ -74,6 +74,7 @@ def initialize_db():
         emr_relation     TEXT DEFAULT '',
         emr_phone        TEXT DEFAULT '',
         referring_name   TEXT DEFAULT '',
+        referring_taxonomy TEXT DEFAULT '',
         referring_npi    TEXT DEFAULT '',
         intake_date      TEXT DEFAULT '',
         sig_on_file_date TEXT DEFAULT '',
@@ -207,6 +208,7 @@ def _migrate_patients_table():
     """Add any missing columns to patients (forward migration)."""
     new_columns = [
         ("sig_on_file_date", "TEXT DEFAULT ''"),
+        ("referring_taxonomy", "TEXT DEFAULT ''"),
     ]
     conn = get_connection()
     cur = conn.cursor()

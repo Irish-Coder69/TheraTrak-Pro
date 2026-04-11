@@ -970,6 +970,8 @@ class PatientDialog(tk.Toplevel):
         ttk.Entry(f3, textvariable=self._fld("referring_name"), width=30).grid(row=0, column=1, sticky="ew")
         ttk.Label(f3, text="Referring NPI").grid(row=1, column=0, sticky="e", padx=4, pady=4)
         ttk.Entry(f3, textvariable=self._fld("referring_npi"), width=14).grid(row=1, column=1, sticky="w")
+        ttk.Label(f3, text="Referring Taxonomy (17a)").grid(row=2, column=0, sticky="e", padx=4, pady=4)
+        ttk.Entry(f3, textvariable=self._fld("referring_taxonomy"), width=20).grid(row=2, column=1, sticky="w")
 
         # ── Save / Cancel ─────────────────────────────────────────────────────
         bot = ttk.Frame(self, padding=8)
