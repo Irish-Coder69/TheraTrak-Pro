@@ -1808,7 +1808,7 @@ class CMS1500Tab(ttk.Frame):
             text="This is the actual CMS-1500 template rendered in-app. Use 'Edit Form Data' for manual overrides.",
             foreground=ACCENT,
             justify="left",
-            font=("Calibri", 10, "bold"),
+            font=("Arial", 12, "bold"),
         ).pack(anchor="w", padx=6, pady=(4, 6))
 
         for _, key in self._field_defs:
@@ -1826,11 +1826,43 @@ class CMS1500Tab(ttk.Frame):
         hbar.grid(row=1, column=0, sticky="ew")
         view_wrap.rowconfigure(0, weight=1)
         view_wrap.columnconfigure(0, weight=1)
+        self._paper_canvas.bind("<Enter>", self._bind_canvas_wheel)
+        self._paper_canvas.bind("<Leave>", self._unbind_canvas_wheel)
 
         self._paper_status = ttk.Label(frm, text="Loading CMS-1500 template...", foreground=MUTED)
         self._paper_status.pack(anchor="w", padx=6, pady=(0, 4))
 
         self.after(120, self._open_blank_template)
+
+    def _bind_canvas_wheel(self, _event=None):
+        self._paper_canvas.bind_all("<MouseWheel>", self._on_canvas_mousewheel)
+        self._paper_canvas.bind_all("<Shift-MouseWheel>", self._on_canvas_shift_mousewheel)
+        self._paper_canvas.bind_all("<Button-4>", self._on_canvas_mousewheel)
+        self._paper_canvas.bind_all("<Button-5>", self._on_canvas_mousewheel)
+
+    def _unbind_canvas_wheel(self, _event=None):
+        self._paper_canvas.unbind_all("<MouseWheel>")
+        self._paper_canvas.unbind_all("<Shift-MouseWheel>")
+        self._paper_canvas.unbind_all("<Button-4>")
+        self._paper_canvas.unbind_all("<Button-5>")
+
+    def _on_canvas_mousewheel(self, event):
+        if getattr(event, "num", None) == 4:
+            self._paper_canvas.yview_scroll(-1, "units")
+            return "break"
+        if getattr(event, "num", None) == 5:
+            self._paper_canvas.yview_scroll(1, "units")
+            return "break"
+        delta = int(-event.delta / 120) if getattr(event, "delta", 0) else 0
+        if delta:
+            self._paper_canvas.yview_scroll(delta, "units")
+        return "break"
+
+    def _on_canvas_shift_mousewheel(self, event):
+        delta = int(-event.delta / 120) if getattr(event, "delta", 0) else 0
+        if delta:
+            self._paper_canvas.xview_scroll(delta, "units")
+        return "break"
 
     def _open_data_editor(self):
         win = tk.Toplevel(self)
@@ -2046,10 +2078,13 @@ class CMS1500Tab(ttk.Frame):
             {
                 "service_date": g(s, "session_date"),
                 "cpt_code":     g(s, "cpt_code"),
+                "modifier":     g(s, "cpt_modifier"),
                 "pos":          _extract_place_code(g(s, "place_of_service", "11")),
                 "units":        "1",
                 "charge":       f"{float(s.get('fee', 0) or 0):.2f}",
                 "dx_pointer":   dx_pointer_for(s),
+                "id_qualifier": g(provider, "id_qualifier", "ZZ"),
+                "taxonomy_code": g(provider, "license_num"),
                 "npi":          billing_npi,
             }
             for s in selected
@@ -2089,13 +2124,17 @@ class CMS1500Tab(ttk.Frame):
             "dx4": g(first, "dx4") or g(patient, "dx4"),
             # Row-1 scalar fallbacks (used when service_lines is ignored)
             "service_date": g(first, "session_date"),
+            "illness_date": g(first, "session_date"),
+            "other_date": g(latest_billing, "record_date") or g(first, "session_date"),
             "cpt_code": g(first, "cpt_code"),
+            "modifier": g(first, "cpt_modifier"),
             "place_of_service": _extract_place_code(g(first, "place_of_service", "11")),
             "units": "1",
             "patient_account_no": str(pid),
             "claim_number": g(latest_billing, "claim_number"),
             "check_number": g(latest_billing, "check_number"),
             "prior_auth_number": g(latest_billing, "claim_number"),
+            "additional_claim_info": g(patient, "notes") or g(first, "note_text"),
             "total_charge": f"{total_charge:.2f}",
             "amount_paid": f"{total_paid:.2f}",
             "provider_signature": g(provider, "sig_on_file", "Signature On File"),

@@ -136,12 +136,18 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
                 value = line_val(row, "pos")
             elif "proceduresservicesorsupplies" in norm_field:
                 value = line_val(row, "cpt_code")
+            elif "modifierrow" in norm_field:
+                value = line_val(row, "modifier")
             elif "diagnosisponter" in norm_field:
                 value = line_val(row, "dx_pointer")
             elif "chargesrow" in norm_field:
                 value = line_val(row, "charge")
             elif "daysorunits" in norm_field:
                 value = line_val(row, "units")
+            elif "idqualifier" in norm_field:
+                value = line_val(row, "id_qualifier")
+            elif "taxonomycode" in norm_field:
+                value = line_val(row, "taxonomy_code")
             elif "npi" in norm_field:
                 value = line_val(row, "npi") or get("billing_npi")
             # modifiers, qualifiers, EMG stay blank by default
@@ -193,7 +199,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif "patientsrelationshiptoinsuredother" in norm_field:
             value = mark(relation not in {"", "self", "spouse", "child"})
         elif norm_field == "ssn":
-            value = get("patient_ssn")
+            value = mark(get("federal_tax_id_type").strip().upper() == "SSN")
         elif "telephoneincludeareacode2" in norm_field:
             value = get("insured_phone")
         elif "telephoneincludeareacode" in norm_field:
@@ -252,6 +258,18 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("prior_auth_number")
         elif norm_field.startswith("22resubmissioncode"):
             value = get("check_number")
+        elif "botherclaimiddesignatedbynucc" in norm_field:
+            value = get("claim_number")
+        elif "originalrefno" in norm_field:
+            value = get("claim_number")
+        elif norm_field.startswith("14dateofcurrentillness"):
+            value = get("illness_date")
+        elif norm_field.startswith("15otherdate") and "qual" not in norm_field:
+            value = get("other_date")
+        elif norm_field.startswith("15otherdatequal"):
+            value = "431"
+        elif norm_field.startswith("19additionalclaiminformation"):
+            value = get("additional_claim_info")
         elif "27acceptassignmentyes" in norm_field:
             value = mark(get("accept_assignment").strip().upper() == "YES")
         elif "acceptassignmentno" in norm_field:
@@ -274,8 +292,6 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("tax_id")
         elif norm_field == "ein":
             value = mark(get("federal_tax_id_type").strip().upper() == "EIN")
-        elif norm_field == "ssn1":
-            value = mark(get("federal_tax_id_type").strip().upper() == "SSN")
         elif norm_field.startswith("32servicefacilityname"):
             value = get("facility_name")
         elif norm_field == "servicefacilitystreetaddress":
