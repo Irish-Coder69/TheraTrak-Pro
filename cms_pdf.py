@@ -398,7 +398,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 
         # ── "CHARGES" standalone (row total outside section) ─────────────────
         elif norm_field == "charges":
-            value = get("total_charge")
+            value = get("outside_lab_charge")
 
         # ── Totals ────────────────────────────────────────────────────────────
         elif norm_field.startswith("28totalcharge"):
