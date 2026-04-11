@@ -207,6 +207,14 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
     def mark(condition: bool) -> str:
         return "X" if condition else ""
 
+    def yes_no(key: str) -> bool | None:
+        raw = get(key).strip().upper()
+        if raw in {"YES", "Y", "TRUE", "1"}:
+            return True
+        if raw in {"NO", "N", "FALSE", "0"}:
+            return False
+        return None
+
     def line_val(row: int, key: str) -> str:
         idx = row - 1
         if idx < len(lines):
@@ -339,23 +347,23 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif "isthereanotherhealthbenefitplanno" in norm_field:
             value = mark(not (get("other_insured_name") or get("other_insured_id")))
         elif "aemploymentyes" in norm_field:
-            employed = get("employment_related").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(employed)
+            employed = yes_no("employment_related")
+            value = mark(employed is True)
         elif "employmentno" in norm_field:
-            employed = get("employment_related").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(not employed)
+            employed = yes_no("employment_related")
+            value = mark(employed is False)
         elif "bautoaccidentyes" in norm_field:
-            auto_acc = get("auto_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(auto_acc)
+            auto_acc = yes_no("auto_accident")
+            value = mark(auto_acc is True)
         elif "autoaccidentno" in norm_field:
-            auto_acc = get("auto_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(not auto_acc)
+            auto_acc = yes_no("auto_accident")
+            value = mark(auto_acc is False)
         elif "cotheraccidentyes" in norm_field:
-            other_acc = get("other_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(other_acc)
+            other_acc = yes_no("other_accident")
+            value = mark(other_acc is True)
         elif "otheraccidentno" in norm_field:
-            other_acc = get("other_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(not other_acc)
+            other_acc = yes_no("other_accident")
+            value = mark(other_acc is False)
         elif "placestate" in norm_field:
             value = get("auto_accident_state")
 
@@ -443,7 +451,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field.startswith("17nameofreferringprovider"):
             value = get("referring_name")
         elif norm_field.startswith("17areferringprovidertaxonomycode") or norm_field == "referringprovidertaxonomycode":
-            value = get("referring_taxonomy") or get("taxonomy_code") or get("billing_taxonomy")
+            value = get("referring_taxonomy")
         elif norm_field.startswith("17breferringprovidernpi"):
             value = get("referring_npi")
 
