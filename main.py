@@ -1740,12 +1740,15 @@ class CMS1500Tab(ttk.Frame):
         self._current_pid = None
         self._current_sessions = []
         self._current_data = {}
+        self._last_preview_path = None
         self._build()
 
     def _build(self):
         tb = ttk.Frame(self, padding=(8, 6))
         tb.pack(fill="x")
         btn(tb, "Auto-Populate from Patient", self._auto_populate, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "Open Blank Paper Form", self._open_blank_template).pack(side="left", padx=4)
+        btn(tb, "Open Filled Paper Form", self._refresh_paper_preview).pack(side="left", padx=4)
         btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
         btn(tb, "Print", self._print_form).pack(side="left", padx=4)
         btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
@@ -1753,6 +1756,18 @@ class CMS1500Tab(ttk.Frame):
 
         frm = lframe(self, "CMS-1500 Data")
         frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        ttk.Label(
+            frm,
+            text=(
+                "Paper form mode: use 'Open Blank Paper Form' to view the exact CMS-1500 layout, "
+                "or 'Open Filled Paper Form' to see current data on that same template."
+            ),
+            foreground=ACCENT,
+            wraplength=1000,
+            justify="left",
+            font=("Calibri", 10, "bold"),
+        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=6, pady=(4, 8))
 
         fields = [
             ("Patient Name", "patient_name"),
@@ -1794,10 +1809,27 @@ class CMS1500Tab(ttk.Frame):
         for idx, (label, key) in enumerate(fields):
             row = idx // 2
             col_base = (idx % 2) * 2
+            row = row + 1
             ttk.Label(frm, text=label).grid(row=row, column=col_base, sticky="e", padx=(4, 2), pady=3)
             var = tk.StringVar()
             self._vars[key] = var
             ttk.Entry(frm, textvariable=var).grid(row=row, column=col_base + 1, sticky="ew", padx=(0, 8), pady=3)
+
+    def _open_blank_template(self):
+        if not self._ensure_template():
+            return
+        try:
+            webbrowser.open(CMS_TEMPLATE_FILE.resolve().as_uri())
+        except Exception as ex:
+            messagebox.showerror("CMS-1500", f"Could not open template:\n{ex}")
+
+    def _refresh_paper_preview(self):
+        preview_path = APP_ROOT / "temp" / "CMS1500_live_paper_preview.pdf"
+        saved = self._fill_to_path(preview_path)
+        if not saved:
+            return
+        self._last_preview_path = saved
+        webbrowser.open(saved.resolve().as_uri())
 
     def _ensure_template(self) -> bool:
         if CMS_TEMPLATE_FILE.exists():
@@ -2022,11 +2054,7 @@ class CMS1500Tab(ttk.Frame):
             messagebox.showinfo("Exported", f"PDF saved to:\n{saved}")
 
     def _print_preview(self):
-        preview_path = APP_ROOT / "temp" / f"CMS1500_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        saved = self._fill_to_path(preview_path)
-        if not saved:
-            return
-        webbrowser.open(saved.resolve().as_uri())
+        self._refresh_paper_preview()
 
     def _print_form(self):
         print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
