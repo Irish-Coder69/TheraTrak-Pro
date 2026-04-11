@@ -191,7 +191,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             "service_date": data.get("service_date", ""),
             "cpt_code":     data.get("cpt_code", ""),
             "pos":          data.get("place_of_service", ""),
-            "units":        data.get("units", "1"),
+            "units":        data.get("units", ""),
             "charge":       data.get("total_charge", ""),
             "dx_pointer":   "A" if data.get("dx1") else "",
             "npi":          data.get("billing_npi", ""),
@@ -539,6 +539,20 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     for widget in page.widgets():
         val = field_values.get(widget.field_name, "")
         needs_update = False
+
+        # Ensure all line-item charges (24F) render right-aligned.
+        if (widget.field_name or "").startswith("F CHARGESRow"):
+            try:
+                doc.xref_set_key(widget.xref, "Q", "2")
+            except Exception:
+                pass
+
+        if (widget.field_name or "").startswith("G DAYS OR UNITSRow"):
+            try:
+                doc.xref_set_key(widget.xref, "Q", "1")
+                widget.text_format = 0
+            except Exception:
+                pass
 
         if val != widget.field_value:
             widget.field_value = val
