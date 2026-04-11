@@ -228,7 +228,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_data: Dict[str, object]) -> str:
     """Fill a fillable CMS-1500 template and write output_path."""
     from pypdf import PdfReader, PdfWriter
-    from pypdf.generic import NameObject, BooleanObject
+    from pypdf.generic import NameObject, BooleanObject, ArrayObject, FloatObject
 
     template_path = Path(template_path)
     output_path = Path(output_path)
@@ -242,9 +242,9 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     for page in reader.pages:
         writer.add_page(page)
 
-    for page in writer.pages:
-        writer.update_page_form_field_values(page, field_values)
-
+    # The writer must have /AcroForm before updating field values.
+    # Some pypdf versions raise "No /AcroForm dictionary in PDF of PdfWriter Object"
+    # if update_page_form_field_values runs first.
     if "/AcroForm" in reader.trailer["/Root"]:
         writer._root_object.update(
             {
@@ -254,6 +254,65 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
         writer._root_object["/AcroForm"].update(
             {NameObject("/NeedAppearances"): BooleanObject(True)}
         )
+
+    # Some CMS templates store /Rect coordinates as IndirectObjects, which can
+    # break pypdf form appearance generation. Normalize each /Rect to floats.
+    for page in writer.pages:
+        annots = page.get("/Annots")
+        if not annots:
+            continue
+        try:
+            annot_list = annots.get_object()
+        except Exception:
+            annot_list = annots
+
+        for annot_ref in annot_list:
+            try:
+                annot = annot_ref.get_object()
+            except Exception:
+                continue
+
+            rect = annot.get("/Rect")
+            if not rect:
+                continue
+
+            try:
+                rect_obj = rect.get_object() if hasattr(rect, "get_object") else rect
+            except Exception:
+                rect_obj = rect
+
+            if not isinstance(rect_obj, (list, tuple)) or len(rect_obj) != 4:
+                continue
+
+            coords = []
+            changed = False
+            for item in rect_obj:
+                try:
+                    if hasattr(item, "get_object"):
+                        item = item.get_object()
+                        changed = True
+                    coords.append(float(item))
+                except Exception:
+                    coords = []
+                    break
+
+            if len(coords) == 4 and changed:
+                annot.update(
+                    {
+                        NameObject("/Rect"): ArrayObject([FloatObject(v) for v in coords])
+                    }
+                )
+
+    for page in writer.pages:
+        try:
+            writer.update_page_form_field_values(
+                page,
+                field_values,
+                auto_regenerate=False,
+            )
+        except TypeError:
+            # Compatibility path for older pypdf versions without this kwarg.
+            writer.update_page_form_field_values(page, field_values)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("wb") as f:
