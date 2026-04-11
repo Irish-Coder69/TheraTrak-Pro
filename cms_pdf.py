@@ -398,6 +398,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("provider_signature_date")
         elif norm_field.startswith("17nameofreferringprovider"):
             value = get("referring_name")
+        elif norm_field.startswith("17areferringprovidertaxonomycode") or norm_field == "referringprovidertaxonomycode":
+            value = get("referring_taxonomy") or get("taxonomy_code") or get("billing_taxonomy")
         elif norm_field.startswith("17breferringprovidernpi"):
             value = get("referring_npi")
 

@@ -2143,6 +2143,7 @@ class CMS1500Tab(ttk.Frame):
             "federal_tax_id_type": g(provider, "tax_id_type", "EIN"),
             "billing_id_qualifier": g(provider, "id_qualifier", "ZZ"),
             "referring_name": g(patient, "referring_name"),
+            "referring_taxonomy": g(patient, "referring_taxonomy") or provider_taxonomy,
             "referring_npi": g(patient, "referring_npi"),
             "billing_name": provider_name,
             "billing_address": g(provider, "address"),
