@@ -47,6 +47,10 @@ def _row_number(norm_field: str) -> int | None:
     m = re.search(r"_(\d)$", norm_field)
     if m:
         return int(m.group(1))
+    # Normalized names may collapse separators (e.g., jnpi6).
+    m = re.search(r"(\d)$", norm_field)
+    if m:
+        return int(m.group(1))
     return None
 
 
@@ -228,7 +232,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 
                 if "dateofservicefrommmddyy" in norm_field or ("24adateofservice" in norm_field):
                     value = line_val(row, "service_date")
-                elif "adateofservicetommddyy" in norm_field:
+                elif "adateofservicetommddyy" in norm_field or "dateofservicetommddyy" in norm_field:
                     value = line_val(row, "service_date")
                 elif "placeofservice" in norm_field or "bplaceof" in norm_field:
                     value = line_val(row, "pos")
@@ -253,7 +257,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
                 continue
 
         # ── Patient / insured section ─────────────────────────────────────────
-        if "1ainsuredsid" in norm_field or "1ainsuredsidnumber" in norm_field:
+        if "1ainsuredsid" in norm_field or "1ainsuredsidnumber" in norm_field or "1ainsuredsi" in norm_field:
             value = get("ins_id")
         elif "1medcare" in norm_field:
             value = mark("medicare" in plan_type)
@@ -281,6 +285,10 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field == "sexm2":
             value = "X" if insured_sex == "M" else ""
         elif norm_field == "sexf2":
+            value = "X" if insured_sex == "F" else ""
+        elif norm_field in {"sexm1", "sexm2"}:
+            value = "X" if insured_sex == "M" else ""
+        elif norm_field in {"sexf1", "sexf2"}:
             value = "X" if insured_sex == "F" else ""
         elif norm_field.startswith("4insuredsname"):
             value = get("insured_name")
@@ -330,6 +338,26 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = mark(bool(get("other_insured_name") or get("other_insured_id")))
         elif "isthereanotherhealthbenefitplanno" in norm_field:
             value = mark(not (get("other_insured_name") or get("other_insured_id")))
+        elif "aemploymentyes" in norm_field:
+            employed = get("employment_related").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(employed)
+        elif "employmentno" in norm_field:
+            employed = get("employment_related").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(not employed)
+        elif "bautoaccidentyes" in norm_field:
+            auto_acc = get("auto_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(auto_acc)
+        elif "autoaccidentno" in norm_field:
+            auto_acc = get("auto_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(not auto_acc)
+        elif "cotheraccidentyes" in norm_field:
+            other_acc = get("other_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(other_acc)
+        elif "otheraccidentno" in norm_field:
+            other_acc = get("other_accident").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(not other_acc)
+        elif "placestate" in norm_field:
+            value = get("auto_accident_state")
 
         # ── Diagnosis box 21 ─────────────────────────────────────────────────
         elif norm_field == "ai":
@@ -378,6 +406,16 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("claim_number")
         elif norm_field.startswith("14dateofcurrentillness"):
             value = get("illness_date")
+        elif "10dclaimcodesdesignatedbynucc" in norm_field:
+            value = get("claim_codes")
+        elif norm_field.startswith("16datespatientunabletoworkincurrentoccupatiofrom"):
+            value = get("unable_to_work_from")
+        elif norm_field.startswith("datespatientunabletoworkincurrentoccupatiotommddyy"):
+            value = get("unable_to_work_to")
+        elif norm_field.startswith("18hospitalizationdaterelatedtocurrentservicesfrom"):
+            value = get("hospitalized_from")
+        elif norm_field.startswith("hospitalizationdaterelatedtocurrentservicestommddyy"):
+            value = get("hospitalized_to")
         elif norm_field.startswith("15otherdate") and "qual" not in norm_field:
             value = get("other_date")
         elif norm_field.startswith("15otherdatequal"):
@@ -388,6 +426,12 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = mark(get("accept_assignment").strip().upper() == "YES")
         elif "acceptassignmentno" in norm_field:
             value = mark(get("accept_assignment").strip().upper() == "NO")
+        elif "20outsidelabyes" in norm_field:
+            outside_lab = get("outside_lab").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(outside_lab)
+        elif "outsidelabno" in norm_field:
+            outside_lab = get("outside_lab").strip().upper() in {"YES", "Y", "TRUE", "1"}
+            value = mark(not outside_lab)
         elif norm_field.startswith("12patientssignature"):
             value = get("provider_signature")
         elif norm_field.startswith("13insuredssignature"):
@@ -405,6 +449,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 
         # ── Provider / facility / billing ─────────────────────────────────────
         elif norm_field.startswith("25federaltaxid"):
+            value = get("tax_id")
+        elif "25federaltaxi" in norm_field:
             value = get("tax_id")
         elif norm_field == "ein":
             value = mark(get("federal_tax_id_type").strip().upper() == "EIN")
@@ -439,6 +485,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field in {"bbillingtaxonomycode", "33btaxonomycode"}:
             value = get("billing_taxonomy") or get("taxonomy_code")
         elif norm_field == "bbillingidqualifier":
+            value = get("billing_id_qualifier")
+        elif norm_field == "bidqualifier":
             value = get("billing_id_qualifier")
 
         # ── Fallbacks ─────────────────────────────────────────────────────────

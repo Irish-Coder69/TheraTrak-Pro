@@ -1753,7 +1753,19 @@ class CMS1500Tab(ttk.Frame):
             ("Patient Name", "patient_name"),
             ("Patient DOB", "patient_dob"),
             ("Patient Sex", "patient_sex"),
+            ("Patient SSN", "patient_ssn"),
             ("Insured ID", "ins_id"),
+            ("Insured Name", "insured_name"),
+            ("Insured DOB", "insured_dob"),
+            ("Insured Sex", "insured_sex"),
+            ("Insured Relation", "insured_relation"),
+            ("Insured Group", "insured_group"),
+            ("Insured Plan Type", "insured_plan_type"),
+            ("Insured Plan Name", "insured_plan_name"),
+            ("Other Insured Name", "other_insured_name"),
+            ("Other Insured ID", "other_insured_id"),
+            ("Other Insured Group", "other_insured_group"),
+            ("Other Insured Plan", "other_insured_plan"),
             ("Patient Address", "patient_address"),
             ("Patient City", "patient_city"),
             ("Patient State", "patient_state"),
@@ -1763,11 +1775,36 @@ class CMS1500Tab(ttk.Frame):
             ("Diagnosis 3", "dx3"),
             ("Diagnosis 4", "dx4"),
             ("Service Date", "service_date"),
+            ("Illness Date", "illness_date"),
+            ("Other Date", "other_date"),
+            ("Other Date Qual", "other_date_qual"),
+            ("Unable To Work From", "unable_to_work_from"),
+            ("Unable To Work To", "unable_to_work_to"),
+            ("Hospitalized From", "hospitalized_from"),
+            ("Hospitalized To", "hospitalized_to"),
             ("CPT Code", "cpt_code"),
+            ("Modifier", "modifier"),
             ("Place of Service", "place_of_service"),
             ("Units", "units"),
+            ("Employment Related (Y/N)", "employment_related"),
+            ("Auto Accident (Y/N)", "auto_accident"),
+            ("Auto Accident State", "auto_accident_state"),
+            ("Other Accident (Y/N)", "other_accident"),
+            ("Outside Lab (Y/N)", "outside_lab"),
+            ("Claim Codes (10d)", "claim_codes"),
+            ("Patient Account #", "patient_account_no"),
+            ("Claim Number", "claim_number"),
+            ("Check Number", "check_number"),
+            ("Prior Auth Number", "prior_auth_number"),
+            ("Additional Claim Info", "additional_claim_info"),
             ("Total Charge", "total_charge"),
             ("Amount Paid", "amount_paid"),
+            ("Accept Assignment (YES/NO)", "accept_assignment"),
+            ("Federal Tax ID Type", "federal_tax_id_type"),
+            ("Billing ID Qualifier", "billing_id_qualifier"),
+            ("Referring Name", "referring_name"),
+            ("Referring Taxonomy", "referring_taxonomy"),
+            ("Referring NPI", "referring_npi"),
             ("Billing Name", "billing_name"),
             ("Billing Address", "billing_address"),
             ("Billing City", "billing_city"),
@@ -1775,12 +1812,17 @@ class CMS1500Tab(ttk.Frame):
             ("Billing ZIP", "billing_zip"),
             ("Billing Phone", "billing_phone"),
             ("Billing NPI", "billing_npi"),
+            ("Billing Taxonomy", "billing_taxonomy"),
             ("Tax ID", "tax_id"),
             ("Facility Name", "facility_name"),
             ("Facility Address", "facility_address"),
             ("Facility City", "facility_city"),
             ("Facility State", "facility_state"),
             ("Facility ZIP", "facility_zip"),
+            ("Facility NPI", "facility_npi"),
+            ("Facility Taxonomy", "facility_taxonomy"),
+            ("Provider Signature", "provider_signature"),
+            ("Provider Signature Date", "provider_signature_date"),
         ]
         self._vars = {}
         self._current_pid = None
@@ -1872,10 +1914,27 @@ class CMS1500Tab(ttk.Frame):
         win.geometry("980x700")
         win.transient(self.winfo_toplevel())
 
-        body = ttk.Frame(win, padding=10)
-        body.pack(fill="both", expand=True)
-        for col in (1, 3):
-            body.columnconfigure(col, weight=1)
+        shell = ttk.Frame(win, padding=(10, 10, 10, 0))
+        shell.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(shell, highlightthickness=0)
+        vbar = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vbar.pack(side="right", fill="y")
+
+        body = ttk.Frame(canvas, padding=4)
+        body.columnconfigure(1, weight=1)
+        body.columnconfigure(3, weight=1)
+
+        win_body = canvas.create_window((0, 0), window=body, anchor="nw")
+
+        def _sync_editor_scroll(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(win_body, width=canvas.winfo_width())
+
+        body.bind("<Configure>", _sync_editor_scroll)
+        canvas.bind("<Configure>", _sync_editor_scroll)
 
         for idx, (label, key) in enumerate(self._field_defs):
             row = idx // 2
@@ -2128,11 +2187,22 @@ class CMS1500Tab(ttk.Frame):
             "service_date": g(first, "session_date"),
             "illness_date": g(first, "session_date"),
             "other_date": g(latest_billing, "record_date") or g(first, "session_date"),
+            "other_date_qual": g(latest_billing, "other_date_qual", "431"),
+            "unable_to_work_from": g(first, "unable_to_work_from") or g(patient, "unable_to_work_from"),
+            "unable_to_work_to": g(first, "unable_to_work_to") or g(patient, "unable_to_work_to"),
+            "hospitalized_from": g(first, "hospitalized_from") or g(patient, "hospitalized_from"),
+            "hospitalized_to": g(first, "hospitalized_to") or g(patient, "hospitalized_to"),
             "cpt_code": g(first, "cpt_code"),
             "modifier": g(first, "cpt_modifier"),
             "place_of_service": _extract_place_code(g(first, "place_of_service", "11")),
             "units": "1",
+            "employment_related": g(first, "employment_related") or g(patient, "employment_related"),
+            "auto_accident": g(first, "auto_accident") or g(patient, "auto_accident"),
+            "auto_accident_state": g(first, "auto_accident_state") or g(patient, "auto_accident_state"),
+            "other_accident": g(first, "other_accident") or g(patient, "other_accident"),
+            "outside_lab": g(first, "outside_lab") or g(patient, "outside_lab", "NO"),
             "patient_account_no": str(pid),
+            "claim_codes": g(latest_billing, "claim_codes"),
             "claim_number": g(latest_billing, "claim_number"),
             "check_number": g(latest_billing, "check_number"),
             "prior_auth_number": g(latest_billing, "claim_number"),

@@ -1,0 +1,77 @@
+# CMS-1500 Template Audit Pass 2
+
+Date: 2026-04-11
+Template: CMS1500_template.pdf
+Method: multi-scenario mapping sweep (6 scenarios, 6 service lines)
+
+## Totals
+- Total template fields: 188
+- Mapped (non-empty in at least one scenario): 139
+- Intentional blank: 11
+- Needs mapping review: 38
+
+## Critical Fields
+- 17 NAME OF REFERRING PROVIDER OR OTHER SOURCE: Mapped
+- 17a REFERRING PROVIDER TAXONOMY CODE: Mapped
+- 17b REFERRING PROVIDER NPI: Mapped
+- 32 SERVICE FACILITY NAME: Mapped
+- a NPI_1: Mapped
+- b  TAXONOMY CODE: Mapped
+- 33 BILLING PROVIDER NAME: Mapped
+- a NPI_2: Mapped
+- b BILLING TAXONOMY CODE: Mapped
+- 28 TOTAL CHARGE: Mapped
+- 29 AMOUNT PAID: Mapped
+
+## Needs Mapping Review
+- 10d CLAIM CODES Designated by NUCC
+- 16 DATES PATIENT UNABLE TO WORK IN CURRENT OCCUPATIO FROM MM DD yy
+- 18 HOSPITALIZATION DATE RELATED TO CURRENT SERVICES FROM MM DD yy
+- 1a INSURED'S I
+- 20 OUTSIDE LAB YES
+- 25 FEDERAL TAX I
+- 30 Rsvd for NUCC Use
+- AUTO ACCIDENT NO
+- C I
+- D I
+- DATE OF SERVICE To MM DD yyRow2
+- DATE OF SERVICE To MM DD yyRow3
+- DATE OF SERVICE To MM DD yyRow4
+- DATE OF SERVICE To MM DD yyRow5
+- DATE OF SERVICE To MM DD yyRow6
+- DATES PATIENT UNABLE TO WORK IN CURRENT OCCUPATIO TO MM DD yy
+- E I
+- EMPLOYMENT NO
+- F I
+- G I
+- H I
+- HOSPITALIZATION DATE RELATED TO CURRENT SERVICES TO MM DD yy
+- I I
+- J I
+- J_NPI_6
+- J_TAXONOMY CODE_6
+- K I
+- L I
+- OTHER
+- OTHER ACCIDENT NO
+- OUTSIDE LAB NO
+- PLACE (STATE)
+- SEX F_2
+- SEX M
+- a EMPLOYMENT YES
+- b AUTO ACCIDENT YES
+- b ID QUALIFIER
+- c OTHER ACCIDENT YES
+
+## Intentional Blank
+- 8 RESERVED FOR NUCC USE
+- C EMGRow1
+- C EMGRow2
+- C EMGRow3
+- C EMGRow4
+- C EMGRow5
+- C EMGRow6
+- ICD Ind
+- SSN
+- b RESERVED FOR NUCC USE
+- c RESERVED FOR NUCC USE
