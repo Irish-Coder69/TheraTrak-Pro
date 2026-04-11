@@ -104,6 +104,13 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
     def get(key: str) -> str:
         return data.get(key, "")
 
+    insured_sex = _sex_marker(get("insured_sex"))
+    relation = get("insured_relation").strip().lower()
+    plan_type = f"{get('insured_plan_type')} {get('insured_plan_name')}".strip().lower()
+
+    def mark(condition: bool) -> str:
+        return "X" if condition else ""
+
     def line_val(row: int, key: str) -> str:
         idx = row - 1
         if idx < len(lines):
@@ -144,22 +151,81 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         # ── Patient / insured section ─────────────────────────────────────────
         if "1ainsuredsid" in norm_field or "1ainsuredsidnumber" in norm_field:
             value = get("ins_id")
+        elif "1medcare" in norm_field:
+            value = mark("medicare" in plan_type)
+        elif "medicaid" in norm_field:
+            value = mark("medicaid" in plan_type)
+        elif "tricare" in norm_field:
+            value = mark("tricare" in plan_type)
+        elif "champva" in norm_field:
+            value = mark("champva" in plan_type)
+        elif "grouphealthplan" in norm_field:
+            value = mark("group" in plan_type or "commercial" in plan_type)
+        elif "fecablklung" in norm_field:
+            value = mark("feca" in plan_type or "black lung" in plan_type)
+        elif norm_field == "other":
+            known = ("medicare", "medicaid", "tricare", "champva", "group", "feca", "black lung", "commercial")
+            value = mark(bool(plan_type) and not any(k in plan_type for k in known))
         elif norm_field.startswith("2patientsname"):
             value = get("patient_name")
         elif norm_field.startswith("3patientsbirthdate"):
             value = get("patient_dob")
-        elif norm_field in {"sexm", "sexm2"}:
+        elif norm_field == "sexm":
             value = "X" if patient_sex == "M" else ""
-        elif norm_field in {"sexf", "sexf2"}:
+        elif norm_field == "sexf":
             value = "X" if patient_sex == "F" else ""
+        elif norm_field == "sexm2":
+            value = "X" if insured_sex == "M" else ""
+        elif norm_field == "sexf2":
+            value = "X" if insured_sex == "F" else ""
+        elif norm_field.startswith("4insuredsname"):
+            value = get("insured_name")
         elif norm_field.startswith("5patientsaddress"):
             value = get("patient_address")
+        elif norm_field.startswith("7insuredsaddress"):
+            value = get("insured_address")
+        elif "patientsrelationshiptoinsuredself" in norm_field:
+            value = mark(relation in {"self", ""})
+        elif "patientsrelationshiptoinsuredspouse" in norm_field:
+            value = mark("spouse" in relation)
+        elif "patientsrelationshiptoinsuredchild" in norm_field:
+            value = mark("child" in relation)
+        elif "patientsrelationshiptoinsuredother" in norm_field:
+            value = mark(relation not in {"", "self", "spouse", "child"})
+        elif norm_field == "ssn":
+            value = get("patient_ssn")
+        elif "telephoneincludeareacode2" in norm_field:
+            value = get("insured_phone")
+        elif "telephoneincludeareacode" in norm_field:
+            value = get("patient_phone")
+        elif norm_field == "city2":
+            value = get("insured_city")
         elif norm_field == "city":
             value = get("patient_city")
+        elif norm_field in {"state", "state1"}:
+            value = get("insured_state")
         elif norm_field == "state2":
             value = get("patient_state")
+        elif norm_field == "zipcode2":
+            value = get("insured_zip")
         elif norm_field == "zipcode":
             value = get("patient_zip")
+        elif "ainsureddateofbirth" in norm_field:
+            value = get("insured_dob")
+        elif "insuranceplannameorprogramname" in norm_field and norm_field.startswith("c"):
+            value = get("insured_plan_name")
+        elif "insuranceplannameorprogramname" in norm_field and norm_field.startswith("d"):
+            value = get("other_insured_plan")
+        elif norm_field.startswith("9otherinsuredsname"):
+            value = get("other_insured_name")
+        elif "aotherinsuredspolicyorgroupnumber" in norm_field:
+            value = get("other_insured_group")
+        elif "insuredspolicygrouporfecanumber11" in norm_field:
+            value = get("insured_group")
+        elif "disthereanotherhealthbenefitplanyes" in norm_field:
+            value = mark(bool(get("other_insured_name") or get("other_insured_id")))
+        elif "isthereanotherhealthbenefitplanno" in norm_field:
+            value = mark(not (get("other_insured_name") or get("other_insured_id")))
 
         # ── Diagnosis box 21 ─────────────────────────────────────────────────
         elif norm_field == "ai":
@@ -180,10 +246,36 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("total_charge")
         elif norm_field.startswith("29amountpaid"):
             value = get("amount_paid")
+        elif norm_field.startswith("26patientsaccountno"):
+            value = get("patient_account_no")
+        elif norm_field.startswith("23priorauthorizationnumber"):
+            value = get("prior_auth_number")
+        elif norm_field.startswith("22resubmissioncode"):
+            value = get("check_number")
+        elif "27acceptassignmentyes" in norm_field:
+            value = mark(get("accept_assignment").strip().upper() == "YES")
+        elif "acceptassignmentno" in norm_field:
+            value = mark(get("accept_assignment").strip().upper() == "NO")
+        elif norm_field.startswith("12patientssignature"):
+            value = get("provider_signature")
+        elif norm_field.startswith("13insuredssignature"):
+            value = get("provider_signature")
+        elif norm_field == "signaturedate":
+            value = get("provider_signature_date")
+        elif norm_field == "providerdate":
+            value = get("provider_signature_date")
+        elif norm_field.startswith("17nameofreferringprovider"):
+            value = get("referring_name")
+        elif norm_field.startswith("17breferringprovidernpi"):
+            value = get("referring_npi")
 
         # ── Provider / facility / billing ─────────────────────────────────────
         elif norm_field.startswith("25federaltaxid"):
             value = get("tax_id")
+        elif norm_field == "ein":
+            value = mark(get("federal_tax_id_type").strip().upper() == "EIN")
+        elif norm_field == "ssn1":
+            value = mark(get("federal_tax_id_type").strip().upper() == "SSN")
         elif norm_field.startswith("32servicefacilityname"):
             value = get("facility_name")
         elif norm_field == "servicefacilitystreetaddress":
@@ -208,6 +300,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("billing_phone")
         elif norm_field in {"bnpi", "billingnpi"}:
             value = get("billing_npi")
+        elif norm_field == "bbillingidqualifier":
+            value = get("billing_id_qualifier")
 
         # ── Fallbacks ─────────────────────────────────────────────────────────
         elif norm_field in normalized_data:

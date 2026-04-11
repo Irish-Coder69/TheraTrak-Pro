@@ -1989,6 +1989,7 @@ class CMS1500Tab(ttk.Frame):
         patient = db.get_patient(pid)
         provider = db.get_provider()
         billing_rows = db.get_billing_for_patient(pid)
+        latest_billing = billing_rows[0] if billing_rows else {}
 
         def g(row, key, default=""):
             try:
@@ -2022,6 +2023,16 @@ class CMS1500Tab(ttk.Frame):
 
         provider_name = g(provider, "practice_name") or f"{g(provider, 'provider_first')} {g(provider, 'provider_last')}".strip()
         billing_npi = g(provider, "npi")
+        insured_name = g(patient, "ins_holder") or f"{g(patient, 'last_name')}, {g(patient, 'first_name')}".strip(", ")
+        insured_sex = g(patient, "ins_holder_sex") or patient_sex
+        insured_relation = g(patient, "ins_relation", "Self")
+        insured_dob = g(patient, "ins_holder_dob") or g(patient, "dob")
+        insured_address = g(patient, "ins_address") or g(patient, "address")
+        insured_city = g(patient, "ins_city") or g(patient, "city")
+        insured_state = g(patient, "ins_state") or g(patient, "state")
+        insured_zip = g(patient, "ins_zip") or g(patient, "zip")
+        insured_phone = g(patient, "ins_phone") or g(patient, "phone_home") or g(patient, "phone_cell")
+        patient_phone = g(patient, "phone_home") or g(patient, "phone_cell") or g(patient, "phone_work")
 
         # Build per-row diagnosis pointer: use "A" if only dx1 is set, or all
         # applicable pointers based on which of dx1-dx4 this session carry.
@@ -2048,11 +2059,30 @@ class CMS1500Tab(ttk.Frame):
             "patient_name": f"{g(patient, 'last_name')}, {g(patient, 'first_name')}",
             "patient_dob": g(patient, "dob"),
             "patient_sex": patient_sex,
+            "patient_ssn": g(patient, "ssn"),
             "ins_id": g(patient, "ins_id"),
+            "insured_name": insured_name,
+            "insured_dob": insured_dob,
+            "insured_sex": insured_sex,
+            "insured_relation": insured_relation,
+            "insured_group": g(patient, "ins_group"),
+            "insured_plan_name": g(patient, "ins_name") or g(patient, "ins_plan"),
+            "insured_plan_type": g(patient, "ins_plan"),
+            "insured_address": insured_address,
+            "insured_city": insured_city,
+            "insured_state": insured_state,
+            "insured_zip": insured_zip,
+            "insured_phone": insured_phone,
+            "other_insured_name": g(patient, "ins2_holder") or g(patient, "ins2_name"),
+            "other_insured_id": g(patient, "ins2_id"),
+            "other_insured_group": g(patient, "ins2_group"),
+            "other_insured_plan": g(patient, "ins2_plan"),
+            "other_insured_relation": g(patient, "ins2_relation"),
             "patient_address": g(patient, "address"),
             "patient_city": g(patient, "city"),
             "patient_state": g(patient, "state"),
             "patient_zip": g(patient, "zip"),
+            "patient_phone": patient_phone,
             "dx1": g(first, "dx1") or g(patient, "dx1"),
             "dx2": g(first, "dx2") or g(patient, "dx2"),
             "dx3": g(first, "dx3") or g(patient, "dx3"),
@@ -2062,8 +2092,19 @@ class CMS1500Tab(ttk.Frame):
             "cpt_code": g(first, "cpt_code"),
             "place_of_service": _extract_place_code(g(first, "place_of_service", "11")),
             "units": "1",
+            "patient_account_no": str(pid),
+            "claim_number": g(latest_billing, "claim_number"),
+            "check_number": g(latest_billing, "check_number"),
+            "prior_auth_number": g(latest_billing, "claim_number"),
             "total_charge": f"{total_charge:.2f}",
             "amount_paid": f"{total_paid:.2f}",
+            "provider_signature": g(provider, "sig_on_file", "Signature On File"),
+            "provider_signature_date": g(patient, "sig_on_file_date") or g(first, "session_date") or g(latest_billing, "record_date"),
+            "accept_assignment": "YES" if str(g(provider, "accept_assign", "1")) in {"1", "true", "True", "YES", "yes"} else "NO",
+            "federal_tax_id_type": g(provider, "tax_id_type", "EIN"),
+            "billing_id_qualifier": g(provider, "id_qualifier", "ZZ"),
+            "referring_name": g(patient, "referring_name"),
+            "referring_npi": g(patient, "referring_npi"),
             "billing_name": provider_name,
             "billing_address": g(provider, "address"),
             "billing_city": g(provider, "city"),
