@@ -343,9 +343,12 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif "insuredspolicygrouporfecanumber11" in norm_field:
             value = get("insured_group")
         elif "disthereanotherhealthbenefitplanyes" in norm_field:
-            value = mark(bool(get("other_insured_name") or get("other_insured_id")))
+            has_other = bool(get("other_insured_name") or get("other_insured_id"))
+            explicit = yes_no("other_health_benefit_plan")
+            value = mark(explicit is True or (explicit is None and has_other))
         elif "isthereanotherhealthbenefitplanno" in norm_field:
-            value = mark(not (get("other_insured_name") or get("other_insured_id")))
+            explicit = yes_no("other_health_benefit_plan")
+            value = mark(explicit is False)
         elif "aemploymentyes" in norm_field:
             employed = yes_no("employment_related")
             value = mark(employed is True)
@@ -435,11 +438,11 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif "acceptassignmentno" in norm_field:
             value = mark(get("accept_assignment").strip().upper() == "NO")
         elif "20outsidelabyes" in norm_field:
-            outside_lab = get("outside_lab").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(outside_lab)
+            outside_lab = yes_no("outside_lab")
+            value = mark(outside_lab is True)
         elif "outsidelabno" in norm_field:
-            outside_lab = get("outside_lab").strip().upper() in {"YES", "Y", "TRUE", "1"}
-            value = mark(not outside_lab)
+            outside_lab = yes_no("outside_lab")
+            value = mark(outside_lab is False)
         elif norm_field.startswith("12patientssignature"):
             value = get("provider_signature")
         elif norm_field.startswith("13insuredssignature"):
