@@ -231,7 +231,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             mapped[field] = data[field]
             continue
 
-        if _is_service_field(norm_field):
+        if _is_service_field(norm_field) and norm_field not in {"anpi1", "anpi2"}:
             row = _row_number(norm_field)
             if row is not None:
                 if row < 1 or row > 6 or row > len(lines):
@@ -447,6 +447,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("provider_signature")
         elif norm_field.startswith("13insuredssignature"):
             value = get("provider_signature")
+        elif norm_field.startswith("31providersignature"):
+            value = get("provider_name") or get("billing_name")
         elif norm_field == "signaturedate":
             value = get("provider_signature_date")
         elif norm_field == "providerdate":

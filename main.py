@@ -2115,6 +2115,7 @@ class CMS1500Tab(ttk.Frame):
             patient_sex = "F"
 
         provider_name = g(provider, "practice_name") or f"{g(provider, 'provider_first')} {g(provider, 'provider_last')}".strip()
+        rendering_provider_name = f"{g(provider, 'provider_first')} {g(provider, 'provider_last')}".strip()
         billing_npi = g(provider, "npi")
         provider_taxonomy = g(provider, "license_num")
         insured_name = g(patient, "ins_holder") or f"{g(patient, 'last_name')}, {g(patient, 'first_name')}".strip(", ")
@@ -2212,6 +2213,7 @@ class CMS1500Tab(ttk.Frame):
             "total_charge": f"{total_charge:.2f}",
             "amount_paid": f"{total_paid:.2f}",
             "provider_signature": g(provider, "sig_on_file", "Signature On File"),
+            "provider_name": rendering_provider_name or provider_name,
             "provider_signature_date": g(patient, "sig_on_file_date") or g(first, "session_date") or g(latest_billing, "record_date"),
             "accept_assignment": "YES" if str(g(provider, "accept_assign", "1")) in {"1", "true", "True", "YES", "yes"} else "NO",
             "federal_tax_id_type": g(provider, "tax_id_type", "EIN"),
