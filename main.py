@@ -84,6 +84,10 @@ def _extract_place_code(place_value: str, default: str = "11") -> str:
     """Extract place of service code from display format or return code if already code."""
     if not place_value:
         return default
+    # Normalize typographic dashes to ASCII hyphen before map lookup
+    normalized = place_value.replace('\u2013', '-').replace('\u2014', '-').replace('\u2212', '-')
+    if normalized in _PLACE_CODE_MAP:
+        return _PLACE_CODE_MAP[normalized]
     if place_value in _PLACE_CODE_MAP:
         return _PLACE_CODE_MAP[place_value]
     return place_value
