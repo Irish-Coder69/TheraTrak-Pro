@@ -554,6 +554,12 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
             except Exception:
                 pass
 
+        if (widget.field_name or "").startswith("B PlACE OF SERVICERow"):
+            try:
+                doc.xref_set_key(widget.xref, "Q", "1")
+            except Exception:
+                pass
+
         if val != widget.field_value:
             widget.field_value = val
 
