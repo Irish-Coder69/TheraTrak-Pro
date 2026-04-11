@@ -9,6 +9,15 @@ from pathlib import Path
 from typing import Dict, Iterable, List
 
 
+def _to_float(value: object, default: float = 0.0) -> float:
+    try:
+        if hasattr(value, "get_object"):
+            value = value.get_object()
+        return float(value)
+    except Exception:
+        return default
+
+
 def _normalize(name: str) -> str:
     return "".join(ch.lower() for ch in (name or "") if ch.isalnum())
 
@@ -48,6 +57,89 @@ def get_template_fields(template_path: str | Path) -> list[str]:
     reader = PdfReader(str(template_path))
     fields = reader.get_fields() or {}
     return sorted(fields.keys())
+
+
+def get_template_fields_with_positions(template_path: str | Path) -> List[Dict[str, object]]:
+    """Return template fields with page/type/value and annotation rectangle coordinates."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(template_path))
+    out: List[Dict[str, object]] = []
+
+    for page_index, page in enumerate(reader.pages, start=1):
+        annots = page.get("/Annots")
+        if not annots:
+            continue
+
+        try:
+            annot_list = annots.get_object()
+        except Exception:
+            annot_list = annots
+
+        for annot_ref in annot_list:
+            try:
+                annot = annot_ref.get_object()
+            except Exception:
+                continue
+
+            name = _as_text(annot.get("/T"))
+            if not name:
+                continue
+
+            rect = annot.get("/Rect")
+            rect_vals = [0.0, 0.0, 0.0, 0.0]
+            if rect:
+                try:
+                    rect_obj = rect.get_object() if hasattr(rect, "get_object") else rect
+                except Exception:
+                    rect_obj = rect
+                if isinstance(rect_obj, (list, tuple)) and len(rect_obj) == 4:
+                    rect_vals = [_to_float(v) for v in rect_obj]
+
+            out.append(
+                {
+                    "name": name,
+                    "page": page_index,
+                    "field_type": _as_text(annot.get("/FT")),
+                    "value": _as_text(annot.get("/V")),
+                    "rect": tuple(rect_vals),
+                }
+            )
+
+    # Top-to-bottom, then left-to-right to resemble on-page layout order.
+    out.sort(key=lambda item: (int(item["page"]), -float(item["rect"][3]), float(item["rect"][0]), str(item["name"])) )
+    return out
+
+
+def read_cms1500_pdf_fields(pdf_path: str | Path) -> Dict[str, str]:
+    """Read a filled CMS PDF and return {field_name: value}."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(pdf_path))
+    result: Dict[str, str] = {}
+
+    for page in reader.pages:
+        annots = page.get("/Annots")
+        if not annots:
+            continue
+
+        try:
+            annot_list = annots.get_object()
+        except Exception:
+            annot_list = annots
+
+        for annot_ref in annot_list:
+            try:
+                annot = annot_ref.get_object()
+            except Exception:
+                continue
+
+            name = _as_text(annot.get("/T"))
+            if not name:
+                continue
+            result[name] = _as_text(annot.get("/V"))
+
+    return result
 
 
 _SERVICE_LINE_TOKENS = (
@@ -121,6 +213,11 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
     for field in template_fields:
         norm_field = _normalize(field)
         value = ""
+
+        # Direct field-name passthrough allows explicit read/write by real template keys.
+        if field in data and data[field] != "":
+            mapped[field] = data[field]
+            continue
 
         if _is_service_field(norm_field):
             row = _row_number(norm_field)

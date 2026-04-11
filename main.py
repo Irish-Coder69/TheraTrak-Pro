@@ -2179,8 +2179,8 @@ class CMS1500Tab(ttk.Frame):
         if not self._ensure_template():
             return
         try:
-            from cms_pdf import get_template_fields
-            fields = get_template_fields(CMS_TEMPLATE_FILE)
+            from cms_pdf import get_template_fields_with_positions
+            fields = get_template_fields_with_positions(CMS_TEMPLATE_FILE)
         except Exception as ex:
             messagebox.showerror("Template Fields", f"Could not read template fields:\n{ex}")
             return
@@ -2188,10 +2188,29 @@ class CMS1500Tab(ttk.Frame):
         win = tk.Toplevel(self)
         apply_window_icon(win)
         win.title("CMS-1500 Template Fields")
-        win.geometry("620x500")
+        win.geometry("980x620")
         txt = tk.Text(win, wrap="none", font=FONT_MONO)
         txt.pack(fill="both", expand=True)
-        txt.insert("1.0", "\n".join(fields) if fields else "No fillable fields found.")
+
+        if not fields:
+            txt.insert("1.0", "No fillable fields found.")
+        else:
+            lines = []
+            lines.append("Field | Page | Type | Rect(x1,y1,x2,y2) | Current Value")
+            lines.append("-" * 120)
+            for f in fields:
+                rect = f.get("rect") or (0, 0, 0, 0)
+                rect_str = f"({rect[0]:.1f},{rect[1]:.1f},{rect[2]:.1f},{rect[3]:.1f})"
+                line = (
+                    f"{f.get('name','')} | "
+                    f"{f.get('page','')} | "
+                    f"{f.get('field_type','')} | "
+                    f"{rect_str} | "
+                    f"{f.get('value','')}"
+                )
+                lines.append(line)
+            txt.insert("1.0", "\n".join(lines))
+
         txt.config(state="disabled")
 
     def _export_pdf(self):
