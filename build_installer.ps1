@@ -42,6 +42,8 @@ $pyInstallerArgs = @(
     '--add-data', ($assetsDir + ';assets'),
     '--hidden-import', 'pypdf',
     '--hidden-import', 'pypdf.generic',
+    '--hidden-import', 'fitz',
+    '--collect-all', 'fitz',
     $mainPy
 )
 

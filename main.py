@@ -25,6 +25,16 @@ import database as db
 import version_manager as vm
 from app_paths import APP_ROOT, ASSETS_DIR, DB_FILE, ICON_FILE, VERSION_FILE
 
+try:
+    import fitz  # type: ignore[import-not-found]
+    from PIL import Image, ImageTk  # type: ignore[import-not-found]
+    PDF_RENDER_AVAILABLE = True
+except Exception:
+    fitz = None
+    Image = None
+    ImageTk = None
+    PDF_RENDER_AVAILABLE = False
+
 # ─── Colour / Style constants ──────────────────────────────────────────────────
 
 BG       = "#f0f4f8"
@@ -1853,14 +1863,11 @@ class CMS1500Tab(ttk.Frame):
         btn(foot, "Cancel", win.destroy).pack(side="right", padx=4)
 
     def _render_pdf_in_canvas(self, pdf_path: Path) -> bool:
-        try:
-            import fitz
-            from PIL import Image, ImageTk
-        except Exception:
+        if not PDF_RENDER_AVAILABLE:
             self._paper_status.config(
                 text=(
-                    "In-app PDF view requires PyMuPDF and Pillow. "
-                    "Install with: pip install pymupdf pillow"
+                    "In-app PDF rendering components are unavailable in this build. "
+                    "Please install the latest update."
                 ),
                 foreground=DANGER,
             )
