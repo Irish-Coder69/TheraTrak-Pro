@@ -54,7 +54,7 @@ if (Test-Path $cmsTemplate) {
     Copy-Item $cmsTemplate $cmsTemplateDest -Force
     Write-Host "Copied CMS1500_template.pdf to dist."
 } else {
-    Write-Warning "CMS1500_template.pdf not found at '$cmsTemplate' — installer will ship without it."
+    Write-Warning "CMS1500_template.pdf not found at path: $cmsTemplate. Installer will ship without it."
 }
 
 $uninstallerArgs = @(
