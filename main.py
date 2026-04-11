@@ -2947,9 +2947,28 @@ class TheraTrakApp(tk.Tk):
             },
         )
 
+        payload = None
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as ex:
+            if ex.code == 404:
+                messagebox.showinfo(
+                    "Check for Updates",
+                    "No public release has been found on the update server.\n\n"
+                    f"Current Version: {current_ver}\n\n"
+                    "You may already have the latest version.\n"
+                    f"Check manually at:\n{GITHUB_RELEASES_PAGE}"
+                )
+            else:
+                messagebox.showwarning(
+                    "Check for Updates",
+                    f"The update server returned an error (HTTP {ex.code}).\n\n"
+                    f"Current Version: {current_ver}\n\n"
+                    "You can check for updates manually at:\n"
+                    f"{GITHUB_RELEASES_PAGE}"
+                )
+            return
         except Exception:
             messagebox.showwarning(
                 "Check for Updates",
