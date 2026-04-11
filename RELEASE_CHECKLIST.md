@@ -14,7 +14,7 @@
 
 ## Commit and Push
 - Commit source/version changes.
-- Commit rebuilt installer artifact.
+- Do NOT commit `release/TheraTrak-Pro-Installer.exe` (upload it only in GitHub Release).
 - Push to `main`.
 
 ## Publish GitHub Release
