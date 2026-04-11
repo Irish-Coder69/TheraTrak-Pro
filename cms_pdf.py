@@ -221,35 +221,36 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 
         if _is_service_field(norm_field):
             row = _row_number(norm_field)
-            if row is None or row < 1 or row > 6 or row > len(lines):
-                mapped[field] = ""
-                continue
+            if row is not None:
+                if row < 1 or row > 6 or row > len(lines):
+                    mapped[field] = ""
+                    continue
 
-            if "dateofservicefrommmddyy" in norm_field or ("24adateofservice" in norm_field):
-                value = line_val(row, "service_date")
-            elif "adateofservicetommddyy" in norm_field:
-                value = line_val(row, "service_date")
-            elif "placeofservice" in norm_field or "bplaceof" in norm_field:
-                value = line_val(row, "pos")
-            elif "proceduresservicesorsupplies" in norm_field:
-                value = line_val(row, "cpt_code")
-            elif "modifierrow" in norm_field:
-                value = line_val(row, "modifier")
-            elif "diagnosisponter" in norm_field:
-                value = line_val(row, "dx_pointer")
-            elif "chargesrow" in norm_field:
-                value = line_val(row, "charge")
-            elif "daysorunits" in norm_field:
-                value = line_val(row, "units")
-            elif "idqualifier" in norm_field:
-                value = line_val(row, "id_qualifier")
-            elif "taxonomycode" in norm_field:
-                value = line_val(row, "taxonomy_code")
-            elif "npi" in norm_field:
-                value = line_val(row, "npi") or get("billing_npi")
-            # modifiers, qualifiers, EMG stay blank by default
-            mapped[field] = value
-            continue
+                if "dateofservicefrommmddyy" in norm_field or ("24adateofservice" in norm_field):
+                    value = line_val(row, "service_date")
+                elif "adateofservicetommddyy" in norm_field:
+                    value = line_val(row, "service_date")
+                elif "placeofservice" in norm_field or "bplaceof" in norm_field:
+                    value = line_val(row, "pos")
+                elif "proceduresservicesorsupplies" in norm_field:
+                    value = line_val(row, "cpt_code")
+                elif "modifierrow" in norm_field:
+                    value = line_val(row, "modifier")
+                elif "diagnosisponter" in norm_field:
+                    value = line_val(row, "dx_pointer")
+                elif "chargesrow" in norm_field:
+                    value = line_val(row, "charge")
+                elif "daysorunits" in norm_field:
+                    value = line_val(row, "units")
+                elif "idqualifier" in norm_field:
+                    value = line_val(row, "id_qualifier")
+                elif "taxonomycode" in norm_field:
+                    value = line_val(row, "taxonomy_code")
+                elif "npi" in norm_field:
+                    value = line_val(row, "npi") or get("billing_npi")
+                # modifiers, qualifiers, EMG stay blank by default
+                mapped[field] = value
+                continue
 
         # ── Patient / insured section ─────────────────────────────────────────
         if "1ainsuredsid" in norm_field or "1ainsuredsidnumber" in norm_field:
@@ -313,7 +314,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("insured_zip")
         elif norm_field == "zipcode":
             value = get("patient_zip")
-        elif "ainsureddateofbirth" in norm_field:
+        elif "ainsureddateofbirth" in norm_field or "ainsuredsdateofbirth" in norm_field:
             value = get("insured_dob")
         elif "insuranceplannameorprogramname" in norm_field and norm_field.startswith("c"):
             value = get("insured_plan_name")
@@ -415,6 +416,10 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("facility_state")
         elif norm_field == "servicefacilityzipcode":
             value = get("facility_zip")
+        elif norm_field in {"anpi1", "servicefacilitynpi", "32aservicefacilitynpi"}:
+            value = get("facility_npi") or get("billing_npi")
+        elif norm_field in {"btaxonomycode", "servicefacilitytaxonomycode", "32btaxonomycode"}:
+            value = get("facility_taxonomy") or get("billing_taxonomy") or get("taxonomy_code")
         elif norm_field.startswith("33billingprovidername"):
             value = get("billing_name")
         elif norm_field == "billingstreetaddress":
@@ -427,8 +432,10 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("billing_zip")
         elif norm_field.startswith("billingphonenumber"):
             value = get("billing_phone")
-        elif norm_field in {"bnpi", "billingnpi"}:
+        elif norm_field in {"anpi2", "bnpi", "billingnpi", "33abillingnpi"}:
             value = get("billing_npi")
+        elif norm_field in {"bbillingtaxonomycode", "33btaxonomycode"}:
+            value = get("billing_taxonomy") or get("taxonomy_code")
         elif norm_field == "bbillingidqualifier":
             value = get("billing_id_qualifier")
 
@@ -465,11 +472,26 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     template_fields = [w.field_name for w in page.widgets()]
     field_values = map_form_data_to_template_fields(form_data, template_fields)
 
-    # Update each widget value; fitz regenerates appearance streams automatically.
+    # Update each widget value and enforce 11pt field text for consistent print output.
     for widget in page.widgets():
         val = field_values.get(widget.field_name, "")
+        needs_update = False
+
         if val != widget.field_value:
             widget.field_value = val
+
+            needs_update = True
+
+        try:
+            # PyMuPDF uses 0 to indicate auto-size in many templates; force 11pt.
+            if getattr(widget, "text_fontsize", None) != 11:
+                widget.text_fontsize = 11
+                needs_update = True
+        except Exception:
+            # Non-text widget types may not expose text sizing.
+            pass
+
+        if needs_update:
             widget.update()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

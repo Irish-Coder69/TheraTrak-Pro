@@ -2054,6 +2054,7 @@ class CMS1500Tab(ttk.Frame):
 
         provider_name = g(provider, "practice_name") or f"{g(provider, 'provider_first')} {g(provider, 'provider_last')}".strip()
         billing_npi = g(provider, "npi")
+        provider_taxonomy = g(provider, "license_num")
         insured_name = g(patient, "ins_holder") or f"{g(patient, 'last_name')}, {g(patient, 'first_name')}".strip(", ")
         insured_sex = g(patient, "ins_holder_sex") or patient_sex
         insured_relation = g(patient, "ins_relation", "Self")
@@ -2083,7 +2084,7 @@ class CMS1500Tab(ttk.Frame):
                 "charge":       f"{float(s.get('fee', 0) or 0):.2f}",
                 "dx_pointer":   dx_pointer_for(s),
                 "id_qualifier": g(provider, "id_qualifier", "ZZ"),
-                "taxonomy_code": g(provider, "license_num"),
+                "taxonomy_code": provider_taxonomy,
                 "npi":          billing_npi,
             }
             for s in selected
@@ -2150,12 +2151,16 @@ class CMS1500Tab(ttk.Frame):
             "billing_zip": g(provider, "zip"),
             "billing_phone": g(provider, "phone"),
             "billing_npi": billing_npi,
+            "billing_taxonomy": provider_taxonomy,
             "tax_id": g(provider, "tax_id"),
             "facility_name": provider_name,
             "facility_address": g(provider, "address"),
             "facility_city": g(provider, "city"),
             "facility_state": g(provider, "state"),
             "facility_zip": g(provider, "zip"),
+            "facility_npi": billing_npi,
+            "facility_taxonomy": provider_taxonomy,
+            "taxonomy_code": provider_taxonomy,
             # Multi-line list consumed by cms_pdf mapper
             "service_lines": service_lines,
         }
