@@ -339,6 +339,22 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             value = get("dx3")
         elif norm_field == "di":
             value = get("dx4")
+        elif norm_field == "ei":
+            value = get("dx5")
+        elif norm_field == "fi":
+            value = get("dx6")
+        elif norm_field == "gi":
+            value = get("dx7")
+        elif norm_field == "hi":
+            value = get("dx8")
+        elif norm_field == "ii":
+            value = get("dx9")
+        elif norm_field == "ji":
+            value = get("dx10")
+        elif norm_field == "ki":
+            value = get("dx11")
+        elif norm_field == "li":
+            value = get("dx12")
 
         # ── "CHARGES" standalone (row total outside section) ─────────────────
         elif norm_field == "charges":
@@ -364,7 +380,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field.startswith("15otherdate") and "qual" not in norm_field:
             value = get("other_date")
         elif norm_field.startswith("15otherdatequal"):
-            value = "431"
+            value = get("other_date_qual")
         elif norm_field.startswith("19additionalclaiminformation"):
             value = get("additional_claim_info")
         elif "27acceptassignmentyes" in norm_field:
@@ -423,7 +439,10 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             for data_key, data_value in normalized_data.items():
                 if not data_value:
                     continue
-                if data_key and (data_key in norm_field or norm_field in data_key):
+                # Require minimum length to avoid false fuzzy matches on short field names
+                if data_key and len(norm_field) >= 4 and len(data_key) >= 4 and (
+                    data_key in norm_field or norm_field in data_key
+                ):
                     value = data_value
                     break
 
@@ -433,96 +452,28 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
 
 
 def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_data: Dict[str, object]) -> str:
-    """Fill a fillable CMS-1500 template and write output_path."""
-    from pypdf import PdfReader, PdfWriter
-    from pypdf.generic import NameObject, BooleanObject, ArrayObject, FloatObject
+    """Fill a fillable CMS-1500 template and write output_path using PyMuPDF."""
+    import fitz  # PyMuPDF handles appearance streams correctly
 
     template_path = Path(template_path)
     output_path = Path(output_path)
 
-    reader = PdfReader(str(template_path))
-    writer = PdfWriter()
+    doc = fitz.open(str(template_path))
+    page = doc[0]
 
-    template_fields = (reader.get_fields() or {}).keys()
+    # Collect all field names from the template widgets.
+    template_fields = [w.field_name for w in page.widgets()]
     field_values = map_form_data_to_template_fields(form_data, template_fields)
 
-    for page in reader.pages:
-        writer.add_page(page)
-
-    # The writer must have /AcroForm before updating field values.
-    # Some pypdf versions raise "No /AcroForm dictionary in PDF of PdfWriter Object"
-    # if update_page_form_field_values runs first.
-    if "/AcroForm" in reader.trailer["/Root"]:
-        writer._root_object.update(
-            {
-                NameObject("/AcroForm"): reader.trailer["/Root"]["/AcroForm"]
-            }
-        )
-        writer._root_object["/AcroForm"].update(
-            {NameObject("/NeedAppearances"): BooleanObject(True)}
-        )
-
-    # Some CMS templates store /Rect coordinates as IndirectObjects, which can
-    # break pypdf form appearance generation. Normalize each /Rect to floats.
-    for page in writer.pages:
-        annots = page.get("/Annots")
-        if not annots:
-            continue
-        try:
-            annot_list = annots.get_object()
-        except Exception:
-            annot_list = annots
-
-        for annot_ref in annot_list:
-            try:
-                annot = annot_ref.get_object()
-            except Exception:
-                continue
-
-            rect = annot.get("/Rect")
-            if not rect:
-                continue
-
-            try:
-                rect_obj = rect.get_object() if hasattr(rect, "get_object") else rect
-            except Exception:
-                rect_obj = rect
-
-            if not isinstance(rect_obj, (list, tuple)) or len(rect_obj) != 4:
-                continue
-
-            coords = []
-            changed = False
-            for item in rect_obj:
-                try:
-                    if hasattr(item, "get_object"):
-                        item = item.get_object()
-                        changed = True
-                    coords.append(float(item))
-                except Exception:
-                    coords = []
-                    break
-
-            if len(coords) == 4 and changed:
-                annot.update(
-                    {
-                        NameObject("/Rect"): ArrayObject([FloatObject(v) for v in coords])
-                    }
-                )
-
-    for page in writer.pages:
-        try:
-            writer.update_page_form_field_values(
-                page,
-                field_values,
-                auto_regenerate=False,
-            )
-        except TypeError:
-            # Compatibility path for older pypdf versions without this kwarg.
-            writer.update_page_form_field_values(page, field_values)
+    # Update each widget value; fitz regenerates appearance streams automatically.
+    for widget in page.widgets():
+        val = field_values.get(widget.field_name, "")
+        if val != widget.field_value:
+            widget.field_value = val
+            widget.update()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("wb") as f:
-        writer.write(f)
+    doc.save(str(output_path))
+    doc.close()
 
     return str(output_path)
