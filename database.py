@@ -2,7 +2,6 @@
 TheraTrak Pro – Database layer (SQLite)
 """
 import sqlite3
-import json
 import hashlib
 import hmac
 import secrets
@@ -125,19 +124,6 @@ def initialize_db():
         adjustment       REAL DEFAULT 0.0,
         balance          REAL DEFAULT 0.0,
         claim_number     TEXT DEFAULT '',
-        created_at       TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS cms_claims (
-        id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id       INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        billing_date     TEXT NOT NULL,
-        claim_status     TEXT DEFAULT 'Draft',
-        form_data        TEXT DEFAULT '{}',
-        submission_date  TEXT DEFAULT '',
-        payer_claim_id   TEXT DEFAULT '',
-        total_charge     REAL DEFAULT 0.0,
-        total_paid       REAL DEFAULT 0.0,
         created_at       TEXT DEFAULT (datetime('now'))
     );
 
@@ -491,40 +477,6 @@ def get_billing_summary():
     ).fetchone()
     conn.close()
     return (round(row["tc"] or 0, 2), round(row["tp"] or 0, 2), round(row["tb"] or 0, 2))
-
-
-# ─── CMS Claims ────────────────────────────────────────────────────────────────
-
-def get_claims_for_patient(pid):
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM cms_claims WHERE patient_id=? ORDER BY billing_date DESC",
-        (pid,)
-    ).fetchall()
-    conn.close()
-    return rows
-
-
-def save_claim(data: dict):
-    conn = get_connection()
-    cur = conn.cursor()
-    cid = data.pop("id", None)
-    if isinstance(data.get("form_data"), dict):
-        data["form_data"] = json.dumps(data["form_data"])
-    cols = list(data.keys())
-    vals = list(data.values())
-    if cid is None:
-        placeholders = ",".join(["?"] * len(cols))
-        col_str = ",".join(cols)
-        cur.execute(f"INSERT INTO cms_claims ({col_str}) VALUES ({placeholders})", vals)
-        cid = cur.lastrowid
-    else:
-        set_str = ",".join([f"{c}=?" for c in cols])
-        vals.append(cid)
-        cur.execute(f"UPDATE cms_claims SET {set_str} WHERE id=?", vals)
-    conn.commit()
-    conn.close()
-    return cid
 
 
 # ─── Provider Settings ─────────────────────────────────────────────────────────

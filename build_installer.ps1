@@ -39,8 +39,6 @@ $pyInstallerArgs = @(
     '--distpath', $distDir,
     '--workpath', (Join-Path $buildDir 'app'),
     '--specpath', $buildDir,
-    '--collect-all', 'PIL',
-    '--collect-all', 'reportlab',
     '--add-data', ($assetsDir + ';assets'),
     $mainPy
 )

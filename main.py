@@ -1,7 +1,6 @@
 """
 TheraTrak Pro
-Combined therapy practice management + CMS-1500 billing application.
-Merges the functionality of Notes 444 (H: drive) and CMS1500v6 (E: drive).
+Combined therapy practice management and CMS-1500 application.
 
 Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 """
@@ -20,12 +19,6 @@ import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-
-try:
-    from PIL import Image, ImageTk
-except ImportError:
-    Image = None
-    ImageTk = None
 
 import database as db
 import version_manager as vm
@@ -52,9 +45,9 @@ FONT_H1   = ("Arial", 12, "bold")
 FONT_MONO = ("Arial", 12)
 
 SESSION_TYPES  = ["Individual", "Group", "Couples/Family", "Intake/Evaluation", "Crisis", "Telehealth"]
-PLACE_CODES    = [("11 – Office", "11"), ("02 – Telehealth", "02"), ("12 – Home", "12"),
-                  ("21 – Inpatient Hospital", "21"), ("22 – Outpatient Hospital", "22"),
-                  ("23 – Emergency Room", "23")]
+PLACE_CODES    = [("11 - Office", "11"), ("02 - Telehealth", "02"), ("12 - Home", "12"),
+                  ("21 - Inpatient Hospital", "21"), ("22 - Outpatient Hospital", "22"),
+                  ("23 - Emergency Room", "23")]
 CPT_CODES      = ["90791", "90792", "90832", "90834", "90837", "90845",
                   "90846", "90847", "90853", "90863", "99213", "99214"]
 
@@ -67,13 +60,7 @@ GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/Irish-Coder69/TheraTra
 GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/latest"
 UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
 STARTUP_LOG_FILE = APP_ROOT / "startup.log"
-ALIGNMENT_OFFSETS_FILE = APP_ROOT / "cms1500_alignment_offsets.json"
-ALIGNMENT_OFFSETS_FALLBACK_FILE = (
-    Path(os.environ.get("LOCALAPPDATA", Path.home()))
-    / "Programs"
-    / "TheraTrak Pro"
-    / "cms1500_alignment_offsets.json"
-)
+CMS_TEMPLATE_FILE = APP_ROOT / "CMS1500_template.pdf"
 
 # Build lookup mapping for place of service codes
 _PLACE_CODE_MAP = {p[0]: p[1] for p in PLACE_CODES}
@@ -86,22 +73,19 @@ def _extract_place_code(place_value: str, default: str = "11") -> str:
     """Extract place of service code from display format or return code if already code."""
     if not place_value:
         return default
-    # If it's a full display format like "11 – Office", extract just the code
     if place_value in _PLACE_CODE_MAP:
         return _PLACE_CODE_MAP[place_value]
-    # If it's already a code, return it
     return place_value
 
 
 def _get_place_display(place_code: str) -> str:
     """Get display format for place of service code, or return code if not found."""
     if not place_code:
-        return "11 – Office"
-    # If it's a code like "11", get the display format
+        return "11 - Office"
     if place_code in _PLACE_CODE_REVERSE:
         return _PLACE_CODE_REVERSE[place_code]
-    # If it's already a display format, return it
     return place_code
+
 
 def _append_startup_log(message: str):
     try:
@@ -143,39 +127,30 @@ def _install_crash_logger():
 
     sys.excepthook = _handle_uncaught
 
+
 def ttk_style():
     style = ttk.Style()
     try:
         style.theme_use("clam")
     except Exception:
         pass
-    # Force Arial 12 as the default for all classic Tk widgets
     style.master.option_add("*Font", ("Arial", 12))
     style.master.option_add("*Text.Font", ("Arial", 12))
     style.master.option_add("*Entry.Font", ("Arial", 12))
-    style.configure("TFrame",       background=BG)
-    style.configure("TLabel",       background=BG, font=FONT_UI)
-    style.configure("TButton",      font=FONT_UI, padding=4)
-    style.configure("TEntry",       font=FONT_UI, padding=3)
-    style.configure("TCombobox",    font=FONT_UI)
-    style.configure("TNotebook",    background=HDR_BG, tabmargins=[2, 4, 2, 0])
-    style.configure("TNotebook.Tab",background=HDR_BG, foreground="white",
-                    font=("Arial", 12, "bold"), padding=[10, 5])
-    style.map("TNotebook.Tab",
-              background=[("selected", BG), ("active", ACCENT)],
-              foreground=[("selected", HDR_BG), ("active", "white")])
-    style.configure("Accent.TButton", background=ACCENT,  foreground="white",
-                    font=("Arial", 12, "bold"), padding=5)
-    style.map("Accent.TButton",
-              background=[("active", ACCENT2), ("pressed", ACCENT2)])
-    style.configure("Danger.TButton", background=DANGER, foreground="white",
-                    font=("Arial", 12, "bold"), padding=5)
-    style.configure("Treeview",       font=FONT_UI, rowheight=24,
-                    background=ROW_ODD, fieldbackground=ROW_ODD)
-    style.configure("Treeview.Heading", font=("Arial", 12, "bold"),
-                    background=HDR_BG, foreground="white")
-    style.map("Treeview", background=[("selected", SEL_BG)],
-              foreground=[("selected", "#1e3a5f")])
+    style.configure("TFrame", background=BG)
+    style.configure("TLabel", background=BG, font=FONT_UI)
+    style.configure("TButton", font=FONT_UI, padding=4)
+    style.configure("TEntry", font=FONT_UI, padding=3)
+    style.configure("TCombobox", font=FONT_UI)
+    style.configure("TNotebook", background=HDR_BG, tabmargins=[2, 4, 2, 0])
+    style.configure("TNotebook.Tab", background=HDR_BG, foreground="white", font=("Arial", 12, "bold"), padding=[10, 5])
+    style.map("TNotebook.Tab", background=[("selected", BG), ("active", ACCENT)], foreground=[("selected", HDR_BG), ("active", "white")])
+    style.configure("Accent.TButton", background=ACCENT, foreground="white", font=("Arial", 12, "bold"), padding=5)
+    style.map("Accent.TButton", background=[("active", ACCENT2), ("pressed", ACCENT2)])
+    style.configure("Danger.TButton", background=DANGER, foreground="white", font=("Arial", 12, "bold"), padding=5)
+    style.configure("Treeview", font=FONT_UI, rowheight=24, background=ROW_ODD, fieldbackground=ROW_ODD)
+    style.configure("Treeview.Heading", font=("Arial", 12, "bold"), background=HDR_BG, foreground="white")
+    style.map("Treeview", background=[("selected", SEL_BG)], foreground=[("selected", "#1e3a5f")])
     return style
 
 
@@ -194,8 +169,7 @@ def labeled_entry(parent, label, row, col=0, width=20, colspan=1):
     ttk.Label(parent, text=label).grid(row=row, column=col, sticky="e", padx=(4, 2), pady=2)
     var = tk.StringVar()
     e = ttk.Entry(parent, textvariable=var, width=width)
-    e.grid(row=row, column=col + 1, sticky="ew", padx=(0, 8), pady=2,
-           columnspan=colspan)
+    e.grid(row=row, column=col + 1, sticky="ew", padx=(0, 8), pady=2, columnspan=colspan)
     return var, e
 
 
@@ -212,7 +186,7 @@ def current_date_str():
 
 
 def fmt_date(d: str) -> str:
-    """YYYY-MM-DD → MM/DD/YYYY display string."""
+    """YYYY-MM-DD -> MM/DD/YYYY display string."""
     try:
         return datetime.strptime(d, "%Y-%m-%d").strftime("%m/%d/%Y")
     except (ValueError, TypeError):
@@ -1600,16 +1574,18 @@ class SessionNotesTab(ttk.Frame):
     def _to_cms(self):
         sid = self._sel_sid()
         if not sid:
-            messagebox.showinfo("Select", "Select a session to generate a CMS-1500 claim.")
+            messagebox.showinfo("Select", "Select a session to generate a CMS-1500 form.")
             return
-        s = db.get_session(sid)
+        session_row = db.get_session(sid)
+        if not session_row:
+            return
         nb = self.master
         for i in range(nb.index("end")):
-            if "CMS" in nb.tab(i, "text"):
+            if "CMS-1500" in nb.tab(i, "text"):
                 nb.select(i)
                 tab = nb.nametowidget(nb.tabs()[i])
                 if hasattr(tab, "load_from_session"):
-                    tab.load_from_session(s["patient_id"], [dict(s)])
+                    tab.load_from_session(session_row["patient_id"], [dict(session_row)])
                 break
 
 
@@ -1630,21 +1606,24 @@ class BillingTab(ttk.Frame):
         btn(tb, "Delete", self._delete_record, "Danger.TButton").pack(side="left", padx=2)
         btn(tb, "All Records", self._show_all).pack(side="left", padx=2)
 
-        self._pt_label = ttk.Label(tb, text="", foreground=ACCENT, font=("Calibri",10,"bold"))
+        self._pt_label = ttk.Label(tb, text="", foreground=ACCENT, font=("Calibri", 10, "bold"))
         self._pt_label.pack(side="right", padx=8)
 
         frm = ttk.Frame(self)
         frm.pack(fill="both", expand=True, padx=8, pady=(0, 4))
 
-        cols = ("id","patient_name","record_date","description","charge","payment",
-                "ins_payment","adjustment","balance","payment_type")
-        self.tv = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
-        hdrs = [("ID",40),("Patient",160),("Date",90),("Description",160),
-                ("Charge",80),("Pt Paid",75),("Ins Paid",75),("Adj",70),
-                ("Balance",80),("Method",100)]
+        cols = (
+            "id", "patient_name", "record_date", "description", "charge", "payment",
+            "ins_payment", "adjustment", "balance", "payment_type",
+        )
+        hdrs = [
+            ("ID", 40), ("Patient", 160), ("Date", 90), ("Description", 160),
+            ("Charge", 80), ("Pt Paid", 75), ("Ins Paid", 75), ("Adj", 70),
+            ("Balance", 80), ("Method", 100),
+        ]
         for (h, w), c in zip(hdrs, cols):
             self.tv.heading(c, text=h, anchor="w")
-            self.tv.column(c, width=w, stretch=c in ("patient_name","description"))
+            self.tv.column(c, width=w, stretch=c in ("patient_name", "description"))
         vsb = ttk.Scrollbar(frm, orient="vertical", command=self.tv.yview)
         self.tv.configure(yscrollcommand=vsb.set)
         self.tv.pack(side="left", fill="both", expand=True)
@@ -1654,7 +1633,6 @@ class BillingTab(ttk.Frame):
         self.tv.tag_configure("credit", foreground=SUCCESS)
         self.tv.tag_configure("overdue", foreground=DANGER)
 
-        # Summary bar
         sumbar = ttk.Frame(self, padding=(8, 4))
         sumbar.pack(fill="x", side="bottom")
         self._lbl_charges = ttk.Label(sumbar, text="Total Charges: $0.00", font=FONT_UI)
@@ -1700,20 +1678,34 @@ class BillingTab(ttk.Frame):
             if not name:
                 pt = db.get_patient(r["patient_id"])
                 name = f"{pt['last_name']}, {pt['first_name']}" if pt else ""
-            self.tv.insert("", "end", iid=str(r["id"]), tags=(tag,),
-                           values=(r["id"], name, fmt_date(r["record_date"]),
-                                   r["description"], fmt_money(r["charge"]),
-                                   fmt_money(r["payment"]), fmt_money(r["ins_payment"]),
-                                   fmt_money(r["adjustment"]), fmt_money(r["balance"]),
-                                   r["payment_type"]))
+            self.tv.insert(
+                "",
+                "end",
+                iid=str(r["id"]),
+                tags=(tag,),
+                values=(
+                    r["id"],
+                    name,
+                    fmt_date(r["record_date"]),
+                    r["description"],
+                    fmt_money(r["charge"]),
+                    fmt_money(r["payment"]),
+                    fmt_money(r["ins_payment"]),
+                    fmt_money(r["adjustment"]),
+                    fmt_money(r["balance"]),
+                    r["payment_type"],
+                ),
+            )
             total_c += float(r["charge"] or 0)
             total_p += float(r["payment"] or 0) + float(r["ins_payment"] or 0)
             total_b += bal
 
         self._lbl_charges.config(text=f"Total Charges: {fmt_money(total_c)}")
         self._lbl_paid.config(text=f"Total Paid: {fmt_money(total_p)}")
-        self._lbl_balance.config(text=f"Balance: {fmt_money(total_b)}",
-                                 foreground=(DANGER if total_b > 0 else SUCCESS))
+        self._lbl_balance.config(
+            text=f"Balance: {fmt_money(total_b)}",
+            foreground=(DANGER if total_b > 0 else SUCCESS),
+        )
 
     def _sel_rid(self):
         sel = self.tv.selection()
@@ -1743,1563 +1735,313 @@ class BillingTab(ttk.Frame):
 class CMS1500Tab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        self._overlay_offsets = {
-            "top": [1, 3],
-            "mid": [1, 3],
-            "dx": [1, 2],
-            "line": [1, 2],
-            "bot": [1, 2],
-        }
-        self._overlay_field_offsets = {
-            "ins_type_medicare": [-383, 128],
-            "patient_name": [11, 74],
-            "patient_address": [15, 72],
-            "ins_type_medicaid": [-339, 127],
-            "ins_type_tricare": [-298, 126],
-            "ins_type_champva": [-225, 127],
-            "patient_dob": [-12, 76],
-            "ins_relation_self": [24, 73],
-            "ins_relation_spouse": [48, 72],
-            "ins_relation_child": [59, 74],
-            "ins_relation_other": [85, 71],
-            "patient_sex": [-25, 75],
-            "patient_sex_f": [24, 74],
-            "ins_type_group": [-182, 127],
-            "ins_type_feca": [-121, 126],
-            "ins_type_other": [-87, 127],
-            "patient_city": [15, 65],
-            "billing_date": [719, 174],
-            "billing_other_id": [-16, 86],
-            "billing_npi": [-12, 86],
-            "facility_npi": [-118, 85],
-            "facility_other_id": [-120, 86],
-            "facility_city_state_zip": [-14, 68],
-            "facility_address": [-14, 76],
-            "facility_name": [-14, 88],
-            "provider_sig": [13, 151],
-            "provider_sig_date": [-26, 151],
-            "billing_qualifier": [-185, 179],
-            "billing_city_state_zip": [-20, 69],
-            "billing_address": [-19, 78],
-            "billing_name": [-19, 89],
-            "billing_phone": [-3, 126],
-            "amount_paid": [24, 101],
-            "total_charge": [22, 100],
-            "sl6_npi": [9, 84],
-            "sl6_id_qual": [-11, 58],
-            "sl6_family_plan": [-8, 82],
-            "sl6_epsdt": [-7, 366],
-            "sl6_units": [8, 82],
-            "sl6_charge": [-12, 82],
-            "sl5_npi": [8, 94],
-            "sl5_id_qual": [-12, 68],
-            "sl5_family_plan": [-9, 93],
-            "sl4_npi": [-12, 415],
-            "sl4_id_qual": [-12, 76],
-            "sl3_npi": [9, 108],
-            "sl3_id_qual": [-12, 87],
-            "sl5_charge": [-12, 93],
-            "sl5_units": [8, 93],
-            "sl5_epsdt": [-31, 425],
-            "sl4_charge": [-11, 103],
-            "sl4_units": [8, 102],
-            "sl4_epsdt": [-55, 481],
-            "sl4_family_plan": [-11, 102],
-            "sl3_charge": [-12, 112],
-            "sl3_units": [8, 112],
-            "sl3_family_plan": [-9, 112],
-            "sl3_epsdt": [-4, 514],
-            "sl2_npi": [11, 117],
-            "sl2_id_qual": [-12, 94],
-            "sl2_family_plan": [-7, 120],
-            "sl2_epsdt": [-31, 571],
-            "sl2_charge": [-11, 120],
-            "sl2_units": [8, 120],
-            "sl1_npi": [11, 128],
-            "sl1_id_qual": [-11, 104],
-            "sl1_units": [9, 127],
-            "sl1_family_plan": [-8, 127],
-            "sl1_charge": [-8, 128],
-            "sl1_epsdt": [-56, 628],
-            "accept_assign": [-21, 101],
-            "accept_assign_yes": [-21, 101],
-            "accept_assign_no": [10, 101],
-            "patient_acct": [-16, 101],
-            "tax_id_ein": [88, 103],
-            "tax_id": [13, 104],
-            "sl6_dx_ptr": [32, 82],
-            "sl5_dx_ptr": [32, 93],
-            "sl4_dx_ptr": [33, 105],
-            "sl3_dx_ptr": [33, 112],
-            "sl2_dx_ptr": [32, 120],
-            "sl1_dx_ptr": [33, 129],
-            "sl6_modifier": [39, 82],
-            "sl6_cpt": [32, 84],
-            "sl5_modifier": [36, 93],
-            "sl5_cpt": [33, 93],
-            "sl4_modifier": [36, 104],
-            "sl4_cpt": [31, 104],
-            "sl3_modifier": [38, 112],
-            "sl3_cpt": [29, 112],
-            "sl2_modifier": [40, 120],
-            "sl2_cpt": [28, 121],
-            "sl1_modifier": [39, 129],
-            "sl1_cpt": [29, 129],
-            "sl6_pos": [24, 84],
-            "sl5_pos": [22, 93],
-            "sl4_pos": [22, 102],
-            "sl3_pos": [22, 111],
-            "sl2_pos": [24, 120],
-            "sl1_pos": [22, 127],
-            "sl6_to_date": [16, 84],
-            "sl5_to_date": [16, 94],
-            "sl4_to_date": [16, 104],
-            "sl3_to_date": [16, 112],
-            "sl2_to_date": [16, 121],
-            "sl1_to_date": [16, 129],
-            "sl6_from_date": [4, 84],
-            "sl5_from_date": [5, 95],
-            "sl4_from_date": [5, 105],
-            "sl3_from_date": [5, 112],
-            "sl2_from_date": [5, 121],
-            "sl1_from_date": [4, 129],
-            "dx9": [-15, 45],
-            "dx5": [-15, 50],
-            "dx1": [-15, 56],
-            "dx10": [-20, 45],
-            "dx6": [-20, 53],
-            "dx2": [-20, 59],
-            "dx11": [-22, 47],
-            "dx7": [-23, 51],
-            "dx3": [-22, 56],
-            "dx12": [-28, 47],
-            "dx8": [-28, 54],
-            "dx4": [-28, 59],
-            "auth_number": [-7, 81],
-            "resubmission_code": [-62, 61],
-            "original_ref_no": [-16, 61],
-            "outside_lab": [-31, 46],
-            "outside_lab_charge": [4, 47],
-            "hospital_from": [-1, 56],
-            "hospital_to": [15, 55],
-            "unable_from": [-4, 70],
-            "unable_to": [13, 70],
-            "ins_sig": [49, 92],
-            "add_info": [15, 47],
-            "ref_provider": [28, 55],
-            "illness_date": [15, 67],
-            "illness_qual": [59, 66],
-            "ref_npi": [40, 57],
-            "ref_qual": [48, 34],
-            "other_date": [97, 67],
-            "other_date_qual": [-122, 67],
-            "patient_sig_date": [53, 94],
-            "patient_sig": [15, 94],
-            "patient_auth_no": [394, 3],
-            "patient_auth_yes": [348, 2],
-            "other_plan": [13, 71],
-            "reserved_nucc_c": [11, -27],
-            "reserved_nucc_b": [13, 81],
-            "other_ins_policy": [13, 40],
-            "other_ins_name": [12, 52],
-            "other_ins_employer": [19, -448],
-            "other_ins_dob": [69, -361],
-            "other_ins_sex_f": [-48, -328],
-            "other_ins_sex": [-65, -330],
-            "patient_phone": [49, 59],
-            "patient_zip": [15, 59],
-            "patient_state": [26, 61],
-            "other_plan_yes": [-102, -418],
-            "patient_status_employed": [-178, -327],
-            "other_claim_id": [-8, 32],
-            "ins_plan": [-7, 76],
-            "reserved_local_use": [-298, -139],
-            "related_other_yes": [-220, 135],
-            "other_plan_no": [-118, -418],
-            "related_other_no": [-166, 134],
-            "related_auto_yes": [-222, 115],
-            "related_auto_no": [-167, 115],
-            "related_auto_state": [-146, 119],
-            "related_emp_yes": [-221, 100],
-            "related_emp_no": [-167, 99],
-            "ins_sex_f": [61, 41],
-            "ins_sex": [-20, 40],
-            "ins_dob": [-61, 44],
-            "patient_status": [19, -324],
-            "patient_status_single": [-153, -339],
-            "patient_status_married": [-171, -339],
-            "patient_status_other": [-188, -339],
-            "patient_status_full_time": [-195, -326],
-            "patient_status_part_time": [-209, -326],
-            "ins_zip2": [-5, 58],
-            "ins_group": [-8, 49],
-            "ins_phone": [51, 58],
-            "ins_state2": [10, 65],
-            "ins_city2": [-6, 65],
-            "ins_address2": [-8, 72],
-            "ins_name": [-5, 75],
-            "ins_id": [-5, 102],
-            "ins_type": [-122, 14],
-            "tax_id_ssn": [-191, -34],
-        }
-        self._overlay_field_size_offsets = {
-            "ins_type_medicare": [-2, 4],
-            "ins_type_medicaid": [-6, 5],
-            "ins_type_tricare": [-4, 4],
-            "ins_type_champva": [-4, 2],
-            "patient_sex": [5, 0],
-            "patient_sex_f": [6, 1],
-            "ins_type_group": [-6, 4],
-            "ins_type_feca": [-6, 5],
-            "ins_type_other": [-7, 5],
-            "ins_relation_self": [-4, 4],
-            "ins_relation_spouse": [-5, 7],
-            "ins_relation_child": [-4, 5],
-            "ins_relation_other": [-2, 5],
-            "billing_other_id": [32, 0],
-            "provider_sig": [-34, 0],
-            "provider_sig_date": [28, 0],
-            "billing_phone": [42, 0],
-            "sl6_npi": [54, 0],
-            "sl6_id_qual": [8, 0],
-            "sl6_units": [19, 1],
-            "sl6_epsdt": [9, 1],
-            "sl5_npi": [58, -1],
-            "sl5_id_qual": [9, 1],
-            "sl4_npi": [53, 1],
-            "sl4_id_qual": [11, 2],
-            "sl3_npi": [53, 4],
-            "sl3_id_qual": [11, 0],
-            "sl6_charge": [45, 1],
-            "sl5_charge": [41, 0],
-            "sl5_units": [15, 0],
-            "sl6_family_plan": [0, 1],
-            "sl4_charge": [40, 0],
-            "sl4_units": [14, 0],
-            "sl4_family_plan": [2, 0],
-            "sl3_charge": [39, -1],
-            "sl3_units": [14, 0],
-            "sl2_npi": [55, 3],
-            "sl2_id_qual": [8, 0],
-            "sl2_charge": [36, 0],
-            "sl2_units": [18, 0],
-            "sl1_npi": [52, 0],
-            "sl1_id_qual": [8, 2],
-            "sl1_units": [12, 2],
-            "sl1_family_plan": [0, 2],
-            "sl1_charge": [30, 0],
-            "accept_assign": [-60, 0],
-            "accept_assign_yes": [-60, 0],
-            "accept_assign_no": [-60, 0],
-            "patient_acct": [44, 0],
-            "sl6_modifier": [66, 0],
-            "sl5_modifier": [66, 1],
-            "sl4_modifier": [65, 1],
-            "sl3_modifier": [64, 0],
-            "sl2_modifier": [61, 1],
-            "sl1_modifier": [62, 0],
-            "sl6_to_date": [15, 1],
-            "sl5_to_date": [16, 0],
-            "sl4_to_date": [16, 1],
-            "sl3_to_date": [16, 0],
-            "sl2_to_date": [16, 0],
-            "sl1_to_date": [17, 0],
-            "tax_id": [89, -1],
-            "sl6_from_date": [16, 1],
-            "sl5_from_date": [14, 0],
-            "sl4_from_date": [14, 0],
-            "sl3_from_date": [14, 0],
-            "sl2_from_date": [14, 0],
-            "sl1_from_date": [14, 0],
-            "dx9": [-8, 0],
-            "dx5": [-8, -2],
-            "dx1": [-10, 0],
-            "dx10": [-8, 0],
-            "dx6": [-10, -2],
-            "dx2": [-10, 0],
-            "dx11": [-8, 0],
-            "dx7": [-8, -2],
-            "dx3": [-8, 0],
-            "dx12": [-6, -2],
-            "dx8": [-6, -2],
-            "dx4": [-6, 0],
-            "auth_number": [-4, 7],
-            "resubmission_code": [55, -1],
-            "original_ref_no": [78, -1],
-            "outside_lab": [-93, -2],
-            "unable_from": [0, -4],
-            "unable_to": [0, -4],
-            "ref_npi": [195, 0],
-            "ref_qual": [-6, 0],
-            "other_date_qual": [-14, 0],
-            "other_date": [75, 0],
-            "patient_sig_date": [79, -1],
-            "patient_auth_yes": [-2, 4],
-            "patient_auth_no": [-2, 4],
-            "patient_status_employed": [-6, 4],
-            "related_other_yes": [-8, 2],
-            "related_other_no": [-6, 4],
-            "related_auto_yes": [-4, 4],
-            "related_auto_no": [-6, 4],
-            "related_emp_yes": [-6, 2],
-            "related_emp_no": [-6, 4],
-            "ins_sex_f": [6, 0],
-            "ins_sex": [6, 0],
-            "ins_dob": [58, 0],
-            "ins_phone": [8, 0],
-            "reserved_local_use": [-80, 38],
-            "tax_id_ein": [-2, 4],
-            "tax_id_ssn": [0, 4],
-            "patient_phone": [-13, 2],
-        }
-        self._selected_overlay_field = ""
-        self._drag_state = None
-        self._resize_drag_state = None
-        self._form_scale = 1.0
-        self._load_alignment_offsets_from_file()
+        self._vars = {}
+        self._current_pid = None
+        self._current_sessions = []
+        self._current_data = {}
         self._build()
 
-    def _load_alignment_offsets_from_file(self):
-        candidates = [ALIGNMENT_OFFSETS_FILE, ALIGNMENT_OFFSETS_FALLBACK_FILE]
-        path = next((p for p in candidates if p.exists()), None)
-        if not path:
-            return
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            return
-
-        if not isinstance(data, dict):
-            return
-
-        section_offsets = data.get("section_offsets", {})
-        field_offsets = data.get("field_offsets", {})
-        field_size_offsets = data.get("field_size_offsets", {})
-
-        if isinstance(section_offsets, dict):
-            for key, vals in section_offsets.items():
-                if (
-                    key in self._overlay_offsets
-                    and isinstance(vals, (list, tuple))
-                    and len(vals) == 2
-                ):
-                    self._overlay_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
-
-        if isinstance(field_offsets, dict):
-            for key, vals in field_offsets.items():
-                if (
-                    key in self._overlay_field_offsets
-                    and isinstance(vals, (list, tuple))
-                    and len(vals) == 2
-                ):
-                    self._overlay_field_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
-
-        if isinstance(field_size_offsets, dict):
-            for key, vals in field_size_offsets.items():
-                if (
-                    key in self._overlay_field_size_offsets
-                    and isinstance(vals, (list, tuple))
-                    and len(vals) == 2
-                ):
-                    self._overlay_field_size_offsets[key] = [int(round(vals[0])), int(round(vals[1]))]
-
     def _build(self):
-        # Left: claim list
-        left = ttk.Frame(self, width=260)
-        left.pack(side="left", fill="y", padx=(8, 0), pady=8)
-        left.pack_propagate(False)
+        tb = ttk.Frame(self, padding=(8, 6))
+        tb.pack(fill="x")
+        btn(tb, "Auto-Populate from Patient", self._auto_populate, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
+        btn(tb, "Print", self._print_form).pack(side="left", padx=4)
+        btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
+        btn(tb, "Template Fields", self._show_template_fields).pack(side="left", padx=4)
 
-        ttk.Label(left, text="Saved Claims", font=FONT_LG).pack(anchor="w", padx=4, pady=4)
-        btn(left, "+ New Claim", self._new_claim, "Accent.TButton").pack(fill="x", padx=4, pady=2)
-        btn(left, "Open Claim", self._open_claim).pack(fill="x", padx=4, pady=2)
+        frm = lframe(self, "CMS-1500 Data")
+        frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        cl_frm = ttk.Frame(left)
-        cl_frm.pack(fill="both", expand=True)
-        self.claim_tv = ttk.Treeview(cl_frm, columns=("id","patient","date","status"),
-                                      show="headings", height=20)
-        for c, h, w in [("id","ID",40),("patient","Patient",120),
-                         ("date","Date",80),("status","Status",70)]:
-            self.claim_tv.heading(c, text=h, anchor="w")
-            self.claim_tv.column(c, width=w)
-        sb2 = ttk.Scrollbar(cl_frm, orient="vertical", command=self.claim_tv.yview)
-        self.claim_tv.configure(yscrollcommand=sb2.set)
-        self.claim_tv.pack(side="left", fill="both", expand=True)
-        sb2.pack(side="right", fill="y")
-        self.claim_tv.bind("<Double-1>", self._open_claim)
+        fields = [
+            ("Patient Name", "patient_name"),
+            ("Patient DOB", "patient_dob"),
+            ("Patient Sex", "patient_sex"),
+            ("Insured ID", "ins_id"),
+            ("Patient Address", "patient_address"),
+            ("Patient City", "patient_city"),
+            ("Patient State", "patient_state"),
+            ("Patient ZIP", "patient_zip"),
+            ("Diagnosis 1", "dx1"),
+            ("Diagnosis 2", "dx2"),
+            ("Diagnosis 3", "dx3"),
+            ("Diagnosis 4", "dx4"),
+            ("Service Date", "service_date"),
+            ("CPT Code", "cpt_code"),
+            ("Place of Service", "place_of_service"),
+            ("Units", "units"),
+            ("Total Charge", "total_charge"),
+            ("Amount Paid", "amount_paid"),
+            ("Billing Name", "billing_name"),
+            ("Billing Address", "billing_address"),
+            ("Billing City", "billing_city"),
+            ("Billing State", "billing_state"),
+            ("Billing ZIP", "billing_zip"),
+            ("Billing Phone", "billing_phone"),
+            ("Billing NPI", "billing_npi"),
+            ("Tax ID", "tax_id"),
+            ("Facility Name", "facility_name"),
+            ("Facility Address", "facility_address"),
+            ("Facility City", "facility_city"),
+            ("Facility State", "facility_state"),
+            ("Facility ZIP", "facility_zip"),
+        ]
 
-        # Right: claim form
-        right = ttk.Frame(self)
-        right.pack(side="left", fill="both", expand=True, padx=8, pady=8)
+        for col in (1, 3):
+            frm.columnconfigure(col, weight=1)
 
-        self._form_title = ttk.Label(right, text="CMS-1500 Claim Form", font=FONT_H1)
-        self._form_title.pack(anchor="w", pady=(0, 6))
-
-        self._form_canvas = tk.Canvas(right, background=BG, highlightthickness=0)
-        vscr = ttk.Scrollbar(right, orient="vertical", command=self._form_canvas.yview)
-        self._form_canvas.configure(yscrollcommand=vscr.set)
-        self._form_canvas.pack(side="left", fill="both", expand=True)
-        vscr.pack(side="right", fill="y")
-        self._bind_form_mousewheel()
-
-        self._form_frame = ttk.Frame(self._form_canvas)
-        self._form_frame_id = self._form_canvas.create_window((0, 0), window=self._form_frame, anchor="nw")
-        self._form_frame.bind("<Configure>", lambda e: self._form_canvas.configure(
-            scrollregion=self._form_canvas.bbox("all")))
-
-        self._build_form(self._form_frame)
-
-        # Action buttons
-        act = ttk.Frame(right, padding=4)
-        act.pack(fill="x", before=self._form_canvas)
-        btn(act, "Auto-Populate from Patient",  self._auto_populate).pack(side="left", padx=4)
-        btn(act, "Save Claim",                  self._save_claim).pack(side="left", padx=4)
-        btn(act, "Print Preview",               self._preview_print).pack(side="left", padx=4)
-        btn(act, "Print",                       self._print_pdf).pack(side="left", padx=4)
-        btn(act, "Print Setup",                 self._open_print_setup).pack(side="left", padx=4)
-        btn(act, "Export PDF",                  self._export_pdf, "Accent.TButton").pack(side="left", padx=4)
-
-        self._refresh_claims()
-
-    def _bind_form_mousewheel(self):
-        self._form_canvas.bind("<Enter>", self._activate_form_mousewheel)
-        self._form_canvas.bind("<Leave>", self._deactivate_form_mousewheel)
-
-    def _activate_form_mousewheel(self, event=None):
-        self._form_canvas.bind_all("<MouseWheel>", self._on_form_mousewheel)
-        self._form_canvas.bind_all("<Shift-MouseWheel>", self._on_form_shift_mousewheel)
-        self._form_canvas.bind_all("<Button-4>", self._on_form_wheel_up)
-        self._form_canvas.bind_all("<Button-5>", self._on_form_wheel_down)
-
-    def _deactivate_form_mousewheel(self, event=None):
-        self._form_canvas.unbind_all("<MouseWheel>")
-        self._form_canvas.unbind_all("<Shift-MouseWheel>")
-        self._form_canvas.unbind_all("<Button-4>")
-        self._form_canvas.unbind_all("<Button-5>")
-
-    def _on_form_mousewheel(self, event):
-        delta = event.delta if hasattr(event, "delta") else 0
-        if delta == 0:
-            return "break"
-        units = -1 if delta > 0 else 1
-        self._form_canvas.yview_scroll(units, "units")
-        return "break"
-
-    def _on_form_shift_mousewheel(self, event):
-        delta = event.delta if hasattr(event, "delta") else 0
-        if delta == 0:
-            return "break"
-        units = -1 if delta > 0 else 1
-        self._form_canvas.xview_scroll(units, "units")
-        return "break"
-
-    def _on_form_wheel_up(self, event):
-        self._form_canvas.yview_scroll(-1, "units")
-        return "break"
-
-    def _on_form_wheel_down(self, event):
-        self._form_canvas.yview_scroll(1, "units")
-        return "break"
-
-    def _build_form(self, parent):
-        """Build the CMS-1500 form directly on top of the provided sample image."""
-        self._cv = {}
-        self._sl_vars = []
-        self._field_window_ids = {}
-        self._field_window_meta = {}
-
-        def fld(name, default=""):
-            v = tk.StringVar(value=default)
-            self._cv[name] = v
-            return v
-
-        sample_image = ASSETS_DIR / "cms1500_sample.png"
-        if not sample_image.exists() or Image is None or ImageTk is None:
-            ttk.Label(
-                parent,
-                text="CMS-1500 sample form image is unavailable.",
-                foreground=DANGER,
-            ).grid(row=0, column=0, sticky="w", padx=8, pady=8)
-            return
-
-        original = Image.open(sample_image)
-        max_width = 1040
-        scale = min(1.0, max_width / float(original.width))
-        if scale < 1.0:
-            display = original.resize(
-                (int(original.width * scale), int(original.height * scale)),
-                Image.Resampling.LANCZOS,
-            )
-        else:
-            display = original.copy()
-        self._form_scale = max(scale, 0.01)
-
-        self._cms_form_pil = display
-        self._cms_form_img = ImageTk.PhotoImage(display)
-
-        parent.columnconfigure(0, weight=1)
-
-        surface = tk.Canvas(
-            parent,
-            width=display.width,
-            height=display.height + 44,
-            bg=BG,
-            highlightthickness=0,
-        )
-        surface.grid(row=0, column=0, sticky="nw", padx=4, pady=4)
-        surface.create_image(0, 0, image=self._cms_form_img, anchor="nw")
-        self._cms_surface = surface
-
-        def sx(value):
-            return int(round(value * scale))
-
-        def sy(value):
-            return int(round(value * scale))
-
-        field_font = ("Arial", 12)
-        line_font = ("Arial", 12)
-        field_height = max(18, sy(24))
-        mini_height = max(14, sy(18))
-        entry_border = "#1f2937"
-        # Section-specific nudges tuned against the current sample form scan.
-        top_x_nudge, top_y_nudge = self._overlay_offsets.get("top", [1, 3])
-        mid_x_nudge, mid_y_nudge = self._overlay_offsets.get("mid", [1, 3])
-        dx_x_nudge, dx_y_nudge = self._overlay_offsets.get("dx", [1, 2])
-        line_x_nudge, line_y_nudge = self._overlay_offsets.get("line", [1, 2])
-        bot_x_nudge, bot_y_nudge = self._overlay_offsets.get("bot", [1, 2])
-
-        def bind_field_selection(widget, field_key):
-            return
-
-        def add_entry(name, x, y, width, *, height=None, justify="left", x_nudge=0, y_nudge=0):
-            field_dx, field_dy = self._overlay_field_offsets.get(name, [0, 0])
-            size_dw, size_dh = self._overlay_field_size_offsets.get(name, [0, 0])
-            widget = tk.Entry(
-                surface,
-                textvariable=fld(name),
-                font=field_font,
-                bd=1,
-                relief="solid",
-                highlightthickness=1,
-                highlightbackground=entry_border,
-                highlightcolor=entry_border,
-                bg="white",
-                fg="black",
-                insertbackground="black",
-                justify=justify,
-            )
-            bind_field_selection(widget, name)
-            base_w = sx(width)
-            base_h = height or field_height
-            item_id = surface.create_window(
-                sx(x + x_nudge + field_dx),
-                sy(y + y_nudge + field_dy),
-                window=widget,
-                anchor="nw",
-                width=max(12, base_w + sx(size_dw)),
-                height=max(12, base_h + sy(size_dh)),
-            )
-            self._field_window_ids[name] = item_id
-            self._field_window_meta[name] = {"item_id": item_id, "base_w": base_w, "base_h": base_h}
-            return widget
-
-        def add_service_entry(var_map, name, x, y, width, *, justify="left", x_nudge=0, y_nudge=0, field_key=None):
+        for idx, (label, key) in enumerate(fields):
+            row = idx // 2
+            col_base = (idx % 2) * 2
+            ttk.Label(frm, text=label).grid(row=row, column=col_base, sticky="e", padx=(4, 2), pady=3)
             var = tk.StringVar()
-            var_map[name] = var
-            field_id = field_key or name
-            field_dx, field_dy = self._overlay_field_offsets.get(field_id, [0, 0])
-            size_dw, size_dh = self._overlay_field_size_offsets.get(field_id, [0, 0])
-            widget = tk.Entry(
-                surface,
-                textvariable=var,
-                font=line_font,
-                bd=1,
-                relief="solid",
-                highlightthickness=1,
-                highlightbackground=entry_border,
-                highlightcolor=entry_border,
-                bg="white",
-                fg="black",
-                insertbackground="black",
-                justify=justify,
-            )
-            bind_field_selection(widget, field_id)
-            base_w = sx(width)
-            base_h = max(16, sy(22))
-            item_id = surface.create_window(
-                sx(x + x_nudge + field_dx),
-                sy(y + y_nudge + field_dy),
-                window=widget,
-                anchor="nw",
-                width=max(12, base_w + sx(size_dw)),
-                height=max(12, base_h + sy(size_dh)),
-            )
-            self._field_window_ids[field_id] = item_id
-            self._field_window_meta[field_id] = {"item_id": item_id, "base_w": base_w, "base_h": base_h}
+            self._vars[key] = var
+            ttk.Entry(frm, textvariable=var).grid(row=row, column=col_base + 1, sticky="ew", padx=(0, 8), pady=3)
 
-        def add_top_entry(name, x, y, width, **kwargs):
-            return add_entry(name, x, y, width, x_nudge=top_x_nudge, y_nudge=top_y_nudge, **kwargs)
-
-        def add_mid_entry(name, x, y, width, **kwargs):
-            return add_entry(name, x, y, width, x_nudge=mid_x_nudge, y_nudge=mid_y_nudge, **kwargs)
-
-        def add_dx_entry(name, x, y, width, **kwargs):
-            return add_entry(name, x, y, width, x_nudge=dx_x_nudge, y_nudge=dx_y_nudge, **kwargs)
-
-        def add_bottom_entry(name, x, y, width, **kwargs):
-            return add_entry(name, x, y, width, x_nudge=bot_x_nudge, y_nudge=bot_y_nudge, **kwargs)
-
-        def add_line_entry(var_map, name, x, y, width, field_key, **kwargs):
-            return add_service_entry(
-                var_map,
-                name,
-                x,
-                y,
-                width,
-                x_nudge=line_x_nudge,
-                y_nudge=line_y_nudge,
-                field_key=field_key,
-                **kwargs,
-            )
-
-        # Top / patient / insured area
-        add_top_entry("ins_type_medicare", 434, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_medicaid", 489, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_tricare", 548, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_champva", 604, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_group", 663, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_feca", 718, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type_other", 771, 183, 28, height=mini_height, justify="center")
-        add_top_entry("ins_type", 808, 183, 110, justify="center")
-        add_top_entry("ins_id", 760, 208, 360)
-        add_top_entry("patient_name", 44, 279, 372)
-        add_top_entry("patient_dob", 492, 281, 110, justify="center")
-        add_top_entry("patient_sex", 665, 281, 18, justify="center")
-        add_top_entry("patient_sex_f", 688, 281, 18, justify="center")
-        add_top_entry("ins_name", 760, 279, 368)
-        add_top_entry("patient_address", 40, 333, 386)
-        add_top_entry("ins_relation_self", 486, 333, 28, height=mini_height, justify="center")
-        add_top_entry("ins_relation_spouse", 533, 333, 28, height=mini_height, justify="center")
-        add_top_entry("ins_relation_child", 580, 333, 28, height=mini_height, justify="center")
-        add_top_entry("ins_relation_other", 627, 333, 28, height=mini_height, justify="center")
-        add_top_entry("ins_address2", 760, 333, 368)
-        add_top_entry("patient_city", 40, 386, 335)
-        add_top_entry("patient_state", 392, 386, 36, justify="center")
-        add_top_entry("patient_zip", 40, 444, 158)
-        add_top_entry("ins_city2", 760, 386, 318)
-        add_top_entry("ins_state2", 1088, 386, 38, justify="center")
-        add_top_entry("patient_phone", 216, 444, 210, justify="center")
-        add_top_entry("ins_zip2", 760, 444, 150)
-        add_top_entry("ins_group", 760, 499, 368)
-        add_top_entry("ins_plan", 760, 617, 368)
-        add_top_entry("ins_phone", 934, 444, 192, justify="center")
-        add_top_entry("patient_status", 486, 444, 193, justify="center")
-        add_top_entry("other_ins_name", 40, 500, 386)
-        add_top_entry("other_ins_policy", 40, 556, 386)
-        add_top_entry("reserved_nucc_b", 40, 614, 386)
-        add_top_entry("reserved_nucc_c", 40, 672, 386)
-        add_top_entry("other_ins_dob", 434, 558, 144, justify="center")
-        add_top_entry("other_ins_employer", 434, 615, 242, justify="center")
-        add_top_entry("patient_sig", 110, 738, 338)
-        add_top_entry("ins_dob", 816, 555, 178, justify="center")
-        add_top_entry("ins_sex", 1032, 555, 16, justify="center")
-        add_top_entry("ins_sex_f", 1054, 555, 16, justify="center")
-        add_top_entry("other_claim_id", 760, 613, 368)
-        add_top_entry("ins_sig", 787, 738, 300)
-        add_top_entry("other_plan", 40, 672, 386)
-        add_top_entry("patient_auth_yes", 433, 739, 26, height=mini_height, justify="center")
-        add_top_entry("patient_auth_no", 461, 739, 26, height=mini_height, justify="center")
-
-        add_top_entry("patient_sig_date", 502, 738, 120, justify="center")
-        # Mid form
-        add_mid_entry("illness_date", 38, 819, 148)
-        add_mid_entry("ref_provider", 38, 876, 370)
-        add_mid_entry("ref_npi", 459, 876, 58)
-        add_mid_entry("illness_qual", 206, 819, 72, justify="center")
-        add_mid_entry("other_date", 432, 819, 149, justify="center")
-        add_mid_entry("other_date_qual", 600, 819, 63, justify="center")
-        add_mid_entry("unable_from", 816, 819, 127, justify="center")
-        add_mid_entry("unable_to", 997, 819, 128, justify="center")
-        add_mid_entry("add_info", 38, 935, 640)
-        add_mid_entry("ref_qual", 421, 876, 38, justify="center")
-        add_mid_entry("auth_number", 760, 990, 368)
-        add_mid_entry("hospital_from", 817, 876, 128, justify="center")
-        add_mid_entry("hospital_to", 998, 876, 128, justify="center")
-
-        add_mid_entry("outside_lab", 816, 935, 114, justify="center")
-        add_mid_entry("outside_lab_charge", 972, 935, 152, justify="center")
-        add_mid_entry("related_emp_yes", 760, 500, 28, height=mini_height, justify="center")
-        add_mid_entry("related_emp_no", 792, 500, 28, height=mini_height, justify="center")
-        add_mid_entry("related_auto_yes", 760, 530, 28, height=mini_height, justify="center")
-        add_mid_entry("related_auto_no", 792, 530, 28, height=mini_height, justify="center")
-        add_mid_entry("related_auto_state", 826, 530, 42, height=mini_height, justify="center")
-        add_mid_entry("related_other_yes", 760, 560, 28, height=mini_height, justify="center")
-        add_mid_entry("related_other_no", 792, 560, 28, height=mini_height, justify="center")
-        add_mid_entry("reserved_local_use", 760, 588, 368)
-        # Diagnosis box
-        add_dx_entry("dx1", 95, 973, 110)
-        add_dx_entry("dx2", 286, 973, 110)
-        add_dx_entry("dx3", 477, 973, 110)
-        add_dx_entry("dx4", 669, 973, 110)
-        add_dx_entry("dx5", 95, 1003, 110)
-        add_dx_entry("dx6", 286, 1003, 110)
-        add_dx_entry("dx7", 477, 1003, 110)
-        add_dx_entry("dx8", 669, 1003, 110)
-        add_dx_entry("dx9", 95, 1033, 110)
-        add_dx_entry("dx10", 286, 1033, 110)
-        add_dx_entry("dx11", 477, 1033, 110)
-        add_dx_entry("dx12", 669, 1033, 110)
-
-        add_dx_entry("resubmission_code", 816, 970, 108, justify="center")
-        add_dx_entry("original_ref_no", 936, 970, 188)
-        # Service lines
-        line_y = [1046, 1103, 1160, 1217, 1274, 1331]
-        for line_idx, y in enumerate(line_y, start=1):
-            sl_row = {}
-            add_line_entry(sl_row, "from_date", 47, y, 108, f"sl{line_idx}_from_date")
-            add_line_entry(sl_row, "to_date", 162, y, 108, f"sl{line_idx}_to_date")
-            add_line_entry(sl_row, "pos", 285, y, 40, f"sl{line_idx}_pos", justify="center")
-            add_line_entry(sl_row, "cpt", 369, y, 96, f"sl{line_idx}_cpt", justify="center")
-            add_line_entry(sl_row, "modifier", 468, y, 110, f"sl{line_idx}_modifier", justify="center")
-            add_line_entry(sl_row, "dx_ptr", 648, y, 60, f"sl{line_idx}_dx_ptr", justify="center")
-            add_line_entry(sl_row, "charge", 769, y, 84, f"sl{line_idx}_charge", justify="center")
-            add_line_entry(sl_row, "units", 872, y, 42, f"sl{line_idx}_units", justify="center")
-            if line_idx in {1, 5, 6}:
-                add_line_entry(sl_row, "epsdt", 919, y, 24, f"sl{line_idx}_epsdt", justify="center")
-            add_line_entry(sl_row, "family_plan", 946, y, 30, f"sl{line_idx}_family_plan", justify="center")
-            add_line_entry(sl_row, "id_qual", 979, y, 34, f"sl{line_idx}_id_qual", justify="center")
-            add_line_entry(sl_row, "npi", 1000, y, 124, f"sl{line_idx}_npi", justify="center")
-            self._sl_vars.append(sl_row)
-
-        # Bottom / provider area
-        add_bottom_entry("tax_id", 38, 1361, 116)
-        add_bottom_entry("tax_id_ein", 223, 1361, 24, height=mini_height, justify="center")
-        add_bottom_entry("tax_id_ssn", 472, 1497, 24, height=mini_height, justify="center")
-        add_bottom_entry("patient_acct", 381, 1361, 160)
-        add_bottom_entry("accept_assign_yes", 605, 1361, 24, height=mini_height, justify="center")
-        add_bottom_entry("accept_assign_no", 636, 1361, 24, height=mini_height, justify="center")
-        add_bottom_entry("total_charge", 774, 1361, 116, justify="center")
-        add_bottom_entry("amount_paid", 928, 1361, 98, justify="center")
-        add_bottom_entry("provider_sig", 38, 1421, 250)
-        add_bottom_entry("provider_sig_date", 294, 1421, 66, justify="center")
-        add_bottom_entry("billing_date", 271, 1497, 88, justify="center")
-        add_bottom_entry("facility_name", 378, 1421, 268)
-        add_bottom_entry("facility_address", 378, 1456, 268)
-        add_bottom_entry("facility_city_state_zip", 378, 1488, 268)
-        add_bottom_entry("facility_npi", 496, 1497, 148, justify="center")
-        add_bottom_entry("facility_other_id", 661, 1497, 148, justify="center")
-        add_bottom_entry("billing_name", 771, 1421, 270)
-        add_bottom_entry("billing_address", 771, 1456, 270)
-        add_bottom_entry("billing_city_state_zip", 771, 1488, 270)
-        add_bottom_entry("billing_phone", 1000, 1361, 130, justify="center")
-        add_bottom_entry("billing_qualifier", 756, 1497, 24, justify="center")
-        add_bottom_entry("billing_npi", 780, 1497, 148, justify="center")
-        add_bottom_entry("billing_other_id", 947, 1497, 178, justify="center")
-
-        lookup_btn = ttk.Button(
-            parent,
-            text="Lookup Diagnosis Code",
-            command=lambda: DSMPicker(self, lambda c: self._dx_insert(c)),
+    def _ensure_template(self) -> bool:
+        if CMS_TEMPLATE_FILE.exists():
+            return True
+        messagebox.showerror(
+            "Template Missing",
+            f"Could not find template:\n{CMS_TEMPLATE_FILE}\n\nAdd CMS1500_template.pdf to the app root.",
         )
-        lookup_btn.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 6))
+        return False
 
-    def _dx_insert(self, code):
-        for key in ["dx1","dx2","dx3","dx4","dx5","dx6","dx7","dx8","dx9","dx10","dx11","dx12"]:
-            if not self._cv[key].get():
-                self._cv[key].set(code)
-                return
-        self._cv["dx12"].set(code)
+    def _collect_form_data(self):
+        # Start with field-by-field UI values
+        form = {k: v.get().strip() for k, v in self._vars.items()}
+        # Merge in the full data dict (which carries service_lines list)
+        # UI scalars take precedence for editable fields; list stays from _current_data.
+        if hasattr(self, "_current_data") and self._current_data:
+            for k, v in self._current_data.items():
+                if k not in form:
+                    form[k] = v
+                elif k == "service_lines":
+                    form[k] = v  # always use the structured list
+        return form
 
-    def _nudge_overlay(self, dx, dy):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode == "field":
-            if not self._selected_overlay_field:
-                return
-            field_offset = self._overlay_field_offsets.setdefault(self._selected_overlay_field, [0, 0])
-            field_offset[0] += dx
-            field_offset[1] += dy
-            self._update_align_status()
-            self._rebuild_form_preserve_values()
-            return
-
-        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
-        if section not in self._overlay_offsets:
-            section = "top"
-        self._overlay_offsets[section][0] += dx
-        self._overlay_offsets[section][1] += dy
-        self._update_align_status()
-        self._rebuild_form_preserve_values()
-
-    def _select_overlay_field(self, field_key):
-        self._selected_overlay_field = field_key
-        self._update_align_status()
-
-    def _start_field_drag(self, event, field_key):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode != "field":
-            self._drag_state = None
-            return
-        if event.state & 0x0001:
-            # Shift-drag is reserved for resize.
-            self._drag_state = None
-            return
-        self._select_overlay_field(field_key)
-        self._drag_state = {
-            "field": field_key,
-            "x_root": event.x_root,
-            "y_root": event.y_root,
-        }
-
-    def _drag_field_motion(self, event, field_key):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode != "field":
-            return
-        if not self._drag_state or self._drag_state.get("field") != field_key:
-            return
-        item_id = self._field_window_ids.get(field_key)
-        if item_id is None or not hasattr(self, "_cms_surface"):
-            return
-
-        dx_px = event.x_root - self._drag_state["x_root"]
-        dy_px = event.y_root - self._drag_state["y_root"]
-        if dx_px == 0 and dy_px == 0:
-            return
-
-        self._cms_surface.move(item_id, dx_px, dy_px)
-        self._drag_state["x_root"] = event.x_root
-        self._drag_state["y_root"] = event.y_root
-
-        off = self._overlay_field_offsets.setdefault(field_key, [0.0, 0.0])
-        off[0] += dx_px / self._form_scale
-        off[1] += dy_px / self._form_scale
-        self._update_align_status()
-
-    def _end_field_drag(self, event, field_key):
-        if self._drag_state and self._drag_state.get("field") == field_key:
-            self._drag_state = None
-            self._rebuild_form_preserve_values()
-
-    def _start_field_resize_drag(self, event, field_key):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode != "field":
-            self._resize_drag_state = None
-            return
-        self._select_overlay_field(field_key)
-        self._resize_drag_state = {
-            "field": field_key,
-            "x_root": event.x_root,
-            "y_root": event.y_root,
-        }
-
-    def _drag_field_resize_motion(self, event, field_key):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode != "field":
-            return
-        if not self._resize_drag_state or self._resize_drag_state.get("field") != field_key:
-            return
-        meta = self._field_window_meta.get(field_key)
-        if not meta or not hasattr(self, "_cms_surface"):
-            return
-
-        dx_px = event.x_root - self._resize_drag_state["x_root"]
-        dy_px = event.y_root - self._resize_drag_state["y_root"]
-        if dx_px == 0 and dy_px == 0:
-            return
-
-        size_off = self._overlay_field_size_offsets.setdefault(field_key, [0.0, 0.0])
-        size_off[0] += dx_px / self._form_scale
-        size_off[1] += dy_px / self._form_scale
-
-        new_w = max(12, meta["base_w"] + int(round(size_off[0] * self._form_scale)))
-        new_h = max(12, meta["base_h"] + int(round(size_off[1] * self._form_scale)))
-        self._cms_surface.itemconfigure(meta["item_id"], width=new_w, height=new_h)
-
-        self._resize_drag_state["x_root"] = event.x_root
-        self._resize_drag_state["y_root"] = event.y_root
-        self._update_align_status()
-
-    def _end_field_resize_drag(self, event, field_key):
-        if self._resize_drag_state and self._resize_drag_state.get("field") == field_key:
-            self._resize_drag_state = None
-            self._rebuild_form_preserve_values()
-
-    def _reset_overlay_field(self):
-        if not self._selected_overlay_field:
-            return
-        self._overlay_field_offsets[self._selected_overlay_field] = [0, 0]
-        self._overlay_field_size_offsets[self._selected_overlay_field] = [0, 0]
-        self._update_align_status()
-        self._rebuild_form_preserve_values()
-
-    def _resize_overlay_field(self, dw, dh):
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode != "field" or not self._selected_overlay_field:
-            return
-        size_offset = self._overlay_field_size_offsets.setdefault(self._selected_overlay_field, [0, 0])
-        size_offset[0] += dw
-        size_offset[1] += dh
-        self._update_align_status()
-        self._rebuild_form_preserve_values()
-
-    def _reset_overlay_section(self):
-        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
-        defaults = {
-            "top": [1, 3],
-            "mid": [1, 3],
-            "dx": [1, 2],
-            "line": [1, 2],
-            "bot": [1, 2],
-        }
-        self._overlay_offsets[section] = defaults.get(section, [1, 3]).copy()
-        self._update_align_status()
-        self._rebuild_form_preserve_values()
-
-    def _export_alignment_offsets(self):
-        path = filedialog.asksaveasfilename(
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json")],
-            initialfile="cms1500_alignment_offsets.json",
-            title="Export CMS Alignment Offsets",
-        )
-        if not path:
-            return
-
-        payload = {
-            "section_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_offsets.items()
-            },
-            "field_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_field_offsets.items()
-            },
-            "field_size_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_field_size_offsets.items()
-            },
-        }
+    def _fill_to_path(self, output_path: Path) -> Path | None:
+        if not self._ensure_template():
+            return None
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2)
-            messagebox.showinfo("Export Alignment", f"Alignment offsets exported to:\n{path}")
-        except OSError as ex:
-            messagebox.showerror("Export Alignment", f"Could not export alignment offsets:\n{ex}")
+            from cms_pdf import fill_cms1500_pdf
+        except ImportError:
+            messagebox.showerror("Missing Dependency", "Install dependency: pip install pypdf")
+            return None
 
-    def _update_align_status(self):
-        if not hasattr(self, "_align_status"):
-            return
-        mode = self._align_mode.get().strip() if hasattr(self, "_align_mode") else "section"
-        if mode == "field":
-            field = self._selected_overlay_field or "none"
-            x_off, y_off = self._overlay_field_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
-            w_off, h_off = self._overlay_field_size_offsets.get(field, [0, 0]) if field != "none" else (0, 0)
-            self._align_status.config(
-                text=f"field {field}: x={int(round(x_off))}, y={int(round(y_off))}, w={int(round(w_off))}, h={int(round(h_off))}"
-            )
-            return
-        section = self._align_section.get().strip() if hasattr(self, "_align_section") else "top"
-        if section not in self._overlay_offsets:
-            section = "top"
-        x_off, y_off = self._overlay_offsets[section]
-        self._align_status.config(text=f"{section}: x={x_off}, y={y_off}")
-
-    def _rebuild_form_preserve_values(self):
-        existing = self._collect_form_data() if hasattr(self, "_cv") else {}
-        for child in self._form_frame.winfo_children():
-            child.destroy()
-        self._build_form(self._form_frame)
-        if not existing:
-            return
-        for key, var in self._cv.items():
-            if key in existing:
-                var.set(str(existing[key]) if existing[key] is not None else "")
-        sls = existing.get("service_lines", [])
-        for i, sl_vars in enumerate(self._sl_vars):
-            sl = sls[i] if i < len(sls) else {}
-            for key, var in sl_vars.items():
-                var.set(str(sl.get(key, "")) if sl.get(key) is not None else "")
-
-    def load_from_session(self, pid, sessions):
-        """Pre-populate form from patient + sessions."""
-        from cms_pdf import cms_form_data_from_patient
-
-        def _fmt_amount(value):
-            try:
-                return f"{float(value):.2f}"
-            except (ValueError, TypeError):
-                return str(value) if value is not None else ""
-
-        pt  = db.get_patient(pid)
-        prov = db.get_provider()
-        fd = cms_form_data_from_patient(pt, sessions, prov)
-        self._apply_relation_checkboxes(fd)
-        for fld, var in self._cv.items():
-            if fld in fd:
-                value = fd[fld]
-                # Convert place_of_service code back to display format for UI
-                if fld == "place_of_service":
-                    value = _get_place_display(str(value) if value is not None else "")
-                if fld in {"outside_lab_charge", "total_charge", "amount_paid"}:
-                    value = _fmt_amount(value)
-                var.set(str(value) if value is not None else "")
-        # Service lines
-        sls = fd.get("service_lines", [])
-        for i, sl_vars in enumerate(self._sl_vars):
-            sl = sls[i] if i < len(sls) else {}
-            for key, var in sl_vars.items():
-                value = sl.get(key, "")
-                if key == "pos":
-                    value = _extract_place_code(str(value) if value is not None else "", default="")
-                elif key == "charge":
-                    value = _fmt_amount(value)
-                var.set(str(value) if value is not None else "")
-        self._current_pid = pid
-        self._current_sessions = sessions
-
-    def _apply_relation_checkboxes(self, fd):
-        relation = str(fd.get("ins_relation", "") or "").strip().lower()
-        rel_map = {
-            "self": "ins_relation_self",
-            "spouse": "ins_relation_spouse",
-            "child": "ins_relation_child",
-            "other": "ins_relation_other",
-        }
-        for key in rel_map.values():
-            fd.setdefault(key, "")
-        target = rel_map.get(relation)
-        if target and not str(fd.get(target, "")).strip():
-            fd[target] = "X"
+        data = self._collect_form_data()
+        try:
+            fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data)
+            return output_path
+        except Exception as ex:
+            messagebox.showerror("CMS-1500", f"Could not generate PDF:\n{ex}")
+            return None
 
     def _auto_populate(self):
-        # Ask user to pick a patient
         picker = tk.Toplevel(self)
+        apply_window_icon(picker)
         picker.title("Select Patient for CMS-1500")
-        picker.geometry("480x340")
+        picker.geometry("520x360")
         picker.grab_set()
 
         ttk.Label(picker, text="Select Patient:").pack(anchor="w", padx=10, pady=6)
         sv = tk.StringVar()
-        pts = db.get_all_patients("Active")
-        names = [f"{p['last_name']}, {p['first_name']}  (ID:{p['id']})" for p in pts]
-        cb = ttk.Combobox(picker, textvariable=sv, values=names, width=44, state="readonly")
+        patients = db.get_all_patients("Active")
+        names = [f"{p['last_name']}, {p['first_name']} (ID:{p['id']})" for p in patients]
+        cb = ttk.Combobox(picker, textvariable=sv, values=names, width=48, state="readonly")
         cb.pack(padx=10, pady=4)
 
-        ttk.Label(picker, text="Select Sessions (hold Ctrl for multi-select):").pack(anchor="w", padx=10, pady=4)
-        sess_lv = tk.Listbox(
-            picker,
-            selectmode="extended",
-            exportselection=False,
-            height=10,
-            font=FONT_UI,
-        )
+        ttk.Label(picker, text="Select Sessions (Ctrl for multi-select):").pack(anchor="w", padx=10, pady=4)
+        sess_lv = tk.Listbox(picker, selectmode="extended", exportselection=False, height=10, font=FONT_UI)
         sess_lv.pack(fill="both", expand=True, padx=10)
 
-        def on_pt_select(*a):
+        def on_patient_select(*_args):
             idx = cb.current()
             if idx < 0:
                 return
-            pid = pts[idx]["id"]
+            pid = patients[idx]["id"]
             sess_lv.delete(0, "end")
             for s in db.get_sessions_for_patient(pid):
                 sess_lv.insert("end", f"{fmt_date(s['session_date'])}  {s['cpt_code']}  {fmt_money(s['fee'])}")
-        cb.bind("<<ComboboxSelected>>", on_pt_select)
+
+        cb.bind("<<ComboboxSelected>>", on_patient_select)
 
         def do_populate():
             idx = cb.current()
             if idx < 0:
                 messagebox.showwarning("Select", "Please choose a patient.", parent=picker)
                 return
-            pid = pts[idx]["id"]
-            sel_indices = sess_lv.curselection()
+            pid = patients[idx]["id"]
             sessions = db.get_sessions_for_patient(pid)
-            chosen = [sessions[i] for i in sel_indices] if sel_indices else sessions[:1]
-            self.load_from_session(pid, [dict(s) for s in chosen])
+            chosen_idx = sess_lv.curselection()
+            chosen = [dict(sessions[i]) for i in chosen_idx] if chosen_idx else [dict(sessions[0])] if sessions else []
+            self.load_from_session(pid, chosen)
             picker.destroy()
 
-        ttk.Button(picker, text="Populate Form", command=do_populate).pack(pady=8)
+        btn(picker, "Populate Form", do_populate, "Accent.TButton").pack(pady=8)
 
-    def _collect_form_data(self):
-        fd = {k: v.get().strip() for k, v in self._cv.items()}
-        # Extract just the place of service code from display format if needed
-        fd["place_of_service"] = _extract_place_code(fd.get("place_of_service", "11"))
-        fd["service_lines"] = []
-        for sl in self._sl_vars:
-            entry = {k: v.get().strip() for k, v in sl.items()}
-            if any(entry.values()):
-                # Service line POS is stored under "pos".
-                entry["pos"] = _extract_place_code(entry.get("pos", ""), default="")
-                fd["service_lines"].append(entry)
-        fd["alignment_offsets"] = {
-            "section_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_offsets.items()
-            },
-            "field_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_field_offsets.items()
-            },
-            "field_size_offsets": {
-                key: [int(round(vals[0])), int(round(vals[1]))]
-                for key, vals in self._overlay_field_size_offsets.items()
-            },
+    def load_from_session(self, pid, sessions):
+        patient = db.get_patient(pid)
+        provider = db.get_provider()
+        billing_rows = db.get_billing_for_patient(pid)
+
+        def g(row, key, default=""):
+            try:
+                return row[key] or default
+            except Exception:
+                return default
+
+        first = sessions[0] if sessions else {}
+        # Clamp to 6 service lines (CMS-1500 maximum)
+        selected = list(sessions[:6])
+
+        total_charge = 0.0
+        for s in selected:
+            try:
+                total_charge += float(s.get("fee", 0) or 0)
+            except Exception:
+                pass
+
+        total_paid = 0.0
+        for r in billing_rows:
+            try:
+                total_paid += float(r["payment"] or 0) + float(r["ins_payment"] or 0)
+            except Exception:
+                pass
+
+        patient_sex = g(patient, "sex").strip().upper()
+        if patient_sex.startswith("MALE"):
+            patient_sex = "M"
+        elif patient_sex.startswith("FEMALE"):
+            patient_sex = "F"
+
+        provider_name = g(provider, "practice_name") or f"{g(provider, 'provider_first')} {g(provider, 'provider_last')}".strip()
+        billing_npi = g(provider, "npi")
+
+        # Build per-row diagnosis pointer: use "A" if only dx1 is set, or all
+        # applicable pointers based on which of dx1-dx4 this session carry.
+        def dx_pointer_for(sess) -> str:
+            letters = "ABCD"
+            dx_keys = ["dx1", "dx2", "dx3", "dx4"]
+            ptrs = [letters[i] for i, k in enumerate(dx_keys) if g(sess, k) or g(first, k)]
+            return " ".join(ptrs) if ptrs else "A"
+
+        service_lines = [
+            {
+                "service_date": g(s, "session_date"),
+                "cpt_code":     g(s, "cpt_code"),
+                "pos":          _extract_place_code(g(s, "place_of_service", "11")),
+                "units":        "1",
+                "charge":       f"{float(s.get('fee', 0) or 0):.2f}",
+                "dx_pointer":   dx_pointer_for(s),
+                "npi":          billing_npi,
+            }
+            for s in selected
+        ]
+
+        data = {
+            "patient_name": f"{g(patient, 'last_name')}, {g(patient, 'first_name')}",
+            "patient_dob": g(patient, "dob"),
+            "patient_sex": patient_sex,
+            "ins_id": g(patient, "ins_id"),
+            "patient_address": g(patient, "address"),
+            "patient_city": g(patient, "city"),
+            "patient_state": g(patient, "state"),
+            "patient_zip": g(patient, "zip"),
+            "dx1": g(first, "dx1") or g(patient, "dx1"),
+            "dx2": g(first, "dx2") or g(patient, "dx2"),
+            "dx3": g(first, "dx3") or g(patient, "dx3"),
+            "dx4": g(first, "dx4") or g(patient, "dx4"),
+            # Row-1 scalar fallbacks (used when service_lines is ignored)
+            "service_date": g(first, "session_date"),
+            "cpt_code": g(first, "cpt_code"),
+            "place_of_service": _extract_place_code(g(first, "place_of_service", "11")),
+            "units": "1",
+            "total_charge": f"{total_charge:.2f}",
+            "amount_paid": f"{total_paid:.2f}",
+            "billing_name": provider_name,
+            "billing_address": g(provider, "address"),
+            "billing_city": g(provider, "city"),
+            "billing_state": g(provider, "state"),
+            "billing_zip": g(provider, "zip"),
+            "billing_phone": g(provider, "phone"),
+            "billing_npi": billing_npi,
+            "tax_id": g(provider, "tax_id"),
+            "facility_name": provider_name,
+            "facility_address": g(provider, "address"),
+            "facility_city": g(provider, "city"),
+            "facility_state": g(provider, "state"),
+            "facility_zip": g(provider, "zip"),
+            # Multi-line list consumed by cms_pdf mapper
+            "service_lines": service_lines,
         }
-        return fd
 
-    def _alignment_section_for_field(self, field_name):
-        if field_name.startswith("sl"):
-            return "line"
-        if field_name.startswith("dx") or field_name in {"resubmission_code", "original_ref_no"}:
-            return "dx"
-        if field_name in {
-            "illness_date", "ref_provider", "ref_npi", "illness_qual", "other_date",
-            "other_date_qual", "unable_from", "unable_to", "add_info", "ref_qual",
-            "auth_number", "hospital_from", "hospital_to", "outside_lab",
-            "outside_lab_charge", "related_emp_yes", "related_emp_no", "related_auto_yes",
-            "related_auto_no", "related_auto_state", "related_other_yes",
-            "related_other_no", "reserved_local_use",
-        }:
-            return "mid"
-        if field_name in {
-            "tax_id", "tax_id_ein", "tax_id_ssn", "patient_acct", "accept_assign", "accept_assign_yes", "accept_assign_no", "total_charge",
-            "amount_paid", "provider_sig", "provider_sig_date", "billing_date",
-            "facility_name", "facility_address", "facility_city_state_zip", "facility_qualifier",
-            "facility_npi", "facility_other_id", "billing_name", "billing_address",
-            "billing_city_state_zip", "billing_phone", "billing_qualifier", "billing_npi",
-            "billing_other_id",
-        }:
-            return "bot"
-        return "top"
+        for key, var in self._vars.items():
+            var.set(str(data.get(key, "")))
+        # Update row-count hint for the user
+        n = len(service_lines)
+        if n > 1:
+            self._vars.get("units", tk.StringVar()).set(
+                f"({n} sessions — see service lines)"
+            )
 
-    def _preview_aligned_xy(self, field_name, x, y, section_offsets, field_offsets):
-        section = self._alignment_section_for_field(field_name)
-        sec_x, sec_y = section_offsets.get(section, [0, 0])
-        fld_x, fld_y = field_offsets.get(field_name, [0, 0])
-        return x + sec_x + fld_x, y + sec_y + fld_y
+        self._current_pid = pid
+        self._current_sessions = sessions
+        self._current_data = data  # retained for PDF fill
 
-    def _save_claim(self):
-        fd = self._collect_form_data()
-        pid = getattr(self, "_current_pid", None)
-        if pid is None:
-            messagebox.showinfo("Info", "Use 'Auto-Populate from Patient' before saving.")
+    def _show_template_fields(self):
+        if not self._ensure_template():
             return
         try:
-            total = sum(float(sl.get("charge", 0) or 0) for sl in fd["service_lines"])
-        except (ValueError, TypeError):
-            total = 0.0
-        data = {
-            "patient_id":   pid,
-            "billing_date": fd.get("billing_date") or current_date_str(),
-            "form_data":    json.dumps(fd),
-            "total_charge": total,
-            "claim_status": "Draft",
-        }
-        db.save_claim(data)
-        self._refresh_claims()
-        messagebox.showinfo("Saved", "Claim saved as Draft.")
+            from cms_pdf import get_template_fields
+            fields = get_template_fields(CMS_TEMPLATE_FILE)
+        except Exception as ex:
+            messagebox.showerror("Template Fields", f"Could not read template fields:\n{ex}")
+            return
+
+        win = tk.Toplevel(self)
+        apply_window_icon(win)
+        win.title("CMS-1500 Template Fields")
+        win.geometry("620x500")
+        txt = tk.Text(win, wrap="none", font=FONT_MONO)
+        txt.pack(fill="both", expand=True)
+        txt.insert("1.0", "\n".join(fields) if fields else "No fillable fields found.")
+        txt.config(state="disabled")
 
     def _export_pdf(self):
-        from cms_pdf import build_cms1500_pdf
-        fd = self._collect_form_data()
         path = filedialog.asksaveasfilename(
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf")],
-            initialfile=f"CMS1500_{fd.get('patient_name','claim').replace(', ','_')}.pdf",
+            initialfile=f"CMS1500_{self._vars['patient_name'].get().replace(', ', '_') or 'claim'}.pdf",
         )
         if not path:
             return
-        ok = build_cms1500_pdf(path, fd)
-        if ok:
-            messagebox.showinfo("Exported", f"PDF saved to:\n{path}")
-        else:
-            messagebox.showerror("Error",
-                "Could not generate PDF.\n"
-                "Make sure 'reportlab' is installed:\n"
-                "  pip install reportlab")
+        saved = self._fill_to_path(Path(path))
+        if saved:
+            messagebox.showinfo("Exported", f"PDF saved to:\n{saved}")
 
-    def _print_pdf(self):
-        from cms_pdf import build_cms1500_pdf
+    def _print_preview(self):
+        preview_path = APP_ROOT / "temp" / f"CMS1500_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        saved = self._fill_to_path(preview_path)
+        if not saved:
+            return
+        webbrowser.open(saved.resolve().as_uri())
 
-        fd = self._collect_form_data()
-        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", fd.get("patient_name", "claim") or "claim").strip("_")
-        if not safe_name:
-            safe_name = "claim"
-        temp_dir = APP_ROOT / "temp"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        path = temp_dir / f"CMS1500_{safe_name}_print.pdf"
-
-        ok = build_cms1500_pdf(str(path), fd)
-        if not ok:
-            messagebox.showerror(
-                "Error",
-                "Could not generate PDF for printing.\n"
-                "Make sure 'reportlab' is installed:\n"
-                "  pip install reportlab",
-            )
+    def _print_form(self):
+        print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        saved = self._fill_to_path(print_path)
+        if not saved:
             return
 
         try:
             if sys.platform.startswith("win"):
-                os.startfile(str(path), "print")
+                os.startfile(str(saved), "print")
                 messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
             else:
-                webbrowser.open(path.as_uri())
-                messagebox.showinfo("Print", f"Opened print PDF:\n{path}")
+                webbrowser.open(saved.resolve().as_uri())
+                messagebox.showinfo("Print", f"Opened PDF for printing:\n{saved}")
         except OSError as ex:
-            messagebox.showerror("Print", f"Could not print CMS-1500:\n{ex}")
-
-    def _open_print_setup(self):
-        if not sys.platform.startswith("win"):
-            messagebox.showinfo("Print Setup", "Print setup is only available on Windows.")
-            return
-
-        try:
-            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            default_printer = subprocess.check_output(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    "(Get-CimInstance Win32_Printer | Where-Object {$_.Default -eq $true} | Select-Object -First 1 -ExpandProperty Name)",
-                ],
-                text=True,
-                creationflags=creationflags,
-            ).strip()
-
-            if default_printer:
-                subprocess.Popen(
-                    [
-                        "rundll32",
-                        "printui.dll,PrintUIEntry",
-                        "/e",
-                        "/n",
-                        default_printer,
-                    ],
-                    creationflags=creationflags,
-                )
-            else:
-                subprocess.Popen(["control.exe", "printers"], creationflags=creationflags)
-                messagebox.showinfo(
-                    "Print Setup",
-                    "Default printer not found. Opened Printers so you can choose and adjust settings.",
-                )
-        except OSError as ex:
-            messagebox.showerror("Print Setup", f"Could not open printer setup:\n{ex}")
-        except Exception as ex:
-            messagebox.showerror("Print Setup", f"Unexpected error opening print setup:\n{ex}")
-
-    def _preview_print(self):
-        fd = self._collect_form_data()
-        sample_image = ASSETS_DIR / "cms1500_sample.png"
-        if not sample_image.exists() or Image is None or ImageTk is None:
-            messagebox.showerror(
-                "Print Preview",
-                "The CMS-1500 form background is not available for preview.",
-            )
-            return
-
-        original = Image.open(sample_image)
-        max_width = 1180
-        scale = min(1.0, max_width / float(original.width))
-        if scale < 1.0:
-            display = original.resize(
-                (int(original.width * scale), int(original.height * scale)),
-                Image.Resampling.LANCZOS,
-            )
-        else:
-            display = original.copy()
-
-        win = tk.Toplevel(self)
-        apply_window_icon(win)
-        win.title("CMS-1500 Print Preview")
-        win.geometry("1240x900")
-
-        frm = ttk.Frame(win)
-        frm.pack(fill="both", expand=True)
-
-        cv = tk.Canvas(frm, bg="#f5f5f5", highlightthickness=0)
-        vsb = ttk.Scrollbar(frm, orient="vertical", command=cv.yview)
-        hsb = ttk.Scrollbar(frm, orient="horizontal", command=cv.xview)
-        cv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        cv.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
-        frm.rowconfigure(0, weight=1)
-        frm.columnconfigure(0, weight=1)
-
-        preview_img = ImageTk.PhotoImage(display)
-        cv.create_image(0, 0, image=preview_img, anchor="nw")
-        cv.config(scrollregion=(0, 0, display.width, display.height))
-        win._preview_img = preview_img
-
-        # Bind mousewheel scrolling
-        def _on_preview_mousewheel(event):
-            delta = event.delta if hasattr(event, "delta") else 0
-            if delta == 0:
-                return "break"
-            units = -1 if delta > 0 else 1
-            cv.yview_scroll(units, "units")
-            return "break"
-
-        def _on_preview_shift_mousewheel(event):
-            delta = event.delta if hasattr(event, "delta") else 0
-            if delta == 0:
-                return "break"
-            units = -1 if delta > 0 else 1
-            cv.xview_scroll(units, "units")
-            return "break"
-
-        def _on_preview_wheel_up(event):
-            cv.yview_scroll(-1, "units")
-            return "break"
-
-        def _on_preview_wheel_down(event):
-            cv.yview_scroll(1, "units")
-            return "break"
-
-        def _activate_preview_mousewheel(event=None):
-            cv.bind_all("<MouseWheel>", _on_preview_mousewheel)
-            cv.bind_all("<Shift-MouseWheel>", _on_preview_shift_mousewheel)
-            cv.bind_all("<Button-4>", _on_preview_wheel_up)
-            cv.bind_all("<Button-5>", _on_preview_wheel_down)
-
-        def _deactivate_preview_mousewheel(event=None):
-            cv.unbind_all("<MouseWheel>")
-            cv.unbind_all("<Shift-MouseWheel>")
-            cv.unbind_all("<Button-4>")
-            cv.unbind_all("<Button-5>")
-
-        cv.bind("<Enter>", _activate_preview_mousewheel)
-        cv.bind("<Leave>", _deactivate_preview_mousewheel)
-
-        def sx(v):
-            return int(round(v * scale))
-
-        def sy(v):
-            return int(round(v * scale))
-
-        font_size = 12
-        line_size = 12
-
-        alignment = fd.get("alignment_offsets", {})
-        section_offsets = alignment.get("section_offsets", self._overlay_offsets)
-        field_offsets = alignment.get("field_offsets", self._overlay_field_offsets)
-
-        def draw_field(name, x, y, *, size=None, anchor="nw"):
-            val = fd.get(name, "")
-            if val is None:
-                return
-            text = str(val).strip()
-            if not text:
-                return
-            ax, ay = self._preview_aligned_xy(name, x, y, section_offsets, field_offsets)
-            cv.create_text(
-                sx(ax),
-                sy(ay),
-                text=text,
-                anchor=anchor,
-                fill="black",
-                font=("Arial", size or font_size),
-            )
-
-        for name, x, y in [
-            ("ins_id", 760, 212),
-            ("patient_name", 44, 283),
-            ("patient_dob", 492, 285),
-            ("patient_sex", 665, 285),
-            ("patient_sex_f", 688, 285),
-            ("ins_name", 760, 283),
-            ("patient_address", 40, 337),
-            ("ins_relation_self", 486, 337),
-            ("ins_relation_spouse", 533, 337),
-            ("ins_relation_child", 580, 337),
-            ("ins_relation_other", 627, 337),
-            ("ins_address2", 760, 337),
-            ("patient_city", 40, 390),
-            ("patient_state", 392, 390),
-            ("patient_zip", 40, 448),
-            ("patient_phone", 216, 448),
-            ("ins_city2", 760, 390),
-            ("ins_state2", 1088, 390),
-            ("ins_zip2", 760, 448),
-            ("ins_phone", 934, 448),
-            ("other_ins_name", 40, 504),
-            ("other_ins_policy", 40, 560),
-            ("other_ins_sex", 604, 559),
-            ("other_ins_sex_f", 632, 559),
-            ("ins_group", 760, 503),
-            ("ins_dob", 816, 559),
-            ("ins_sex", 1032, 559),
-            ("ins_sex_f", 1054, 559),
-            ("other_claim_id", 760, 617),
-            ("ins_plan", 760, 621),
-            ("other_plan", 40, 676),
-            ("patient_sig", 110, 742),
-            ("patient_sig_date", 502, 742),
-            ("ins_sig", 787, 742),
-            ("illness_date", 38, 823),
-            ("illness_qual", 206, 823),
-            ("other_date", 432, 823),
-            ("other_date_qual", 600, 823),
-            ("unable_from", 816, 823),
-            ("unable_to", 997, 823),
-            ("ref_provider", 38, 880),
-            ("ref_qual", 421, 880),
-            ("ref_npi", 459, 880),
-            ("hospital_from", 817, 880),
-            ("hospital_to", 998, 880),
-            ("add_info", 38, 939),
-            ("outside_lab", 816, 939),
-            ("outside_lab_charge", 972, 939),
-            ("dx1", 95, 977),
-            ("dx2", 286, 977),
-            ("dx3", 477, 977),
-            ("dx4", 669, 977),
-            ("dx5", 95, 1007),
-            ("dx6", 286, 1007),
-            ("dx7", 477, 1007),
-            ("dx8", 669, 1007),
-            ("dx9", 95, 1037),
-            ("dx10", 286, 1037),
-            ("dx11", 477, 1037),
-            ("dx12", 669, 1037),
-            ("resubmission_code", 816, 974),
-            ("original_ref_no", 936, 974),
-            ("auth_number", 760, 994),
-            ("tax_id", 38, 1365),
-            ("tax_id_ein", 223, 1365),
-            ("patient_acct", 381, 1365),
-            ("accept_assign_yes", 605, 1365),
-            ("accept_assign_no", 636, 1365),
-            ("total_charge", 774, 1365),
-            ("amount_paid", 928, 1365),
-            ("provider_sig", 38, 1425),
-            ("provider_sig_date", 294, 1425),
-            ("billing_date", 271, 1501),
-            ("facility_name", 378, 1425),
-            ("facility_address", 378, 1460),
-            ("facility_city_state_zip", 378, 1492),
-            ("tax_id_ssn", 472, 1501),
-            ("facility_npi", 496, 1501),
-            ("facility_other_id", 661, 1501),
-            ("billing_name", 771, 1425),
-            ("billing_address", 771, 1460),
-            ("billing_city_state_zip", 771, 1492),
-            ("billing_phone", 1000, 1365),
-            ("billing_qualifier", 756, 1501),
-            ("billing_npi", 780, 1501),
-            ("billing_other_id", 947, 1501),
-        ]:
-            draw_field(name, x, y)
-
-        line_y = [1048, 1105, 1162, 1219, 1276, 1333]
-        service_lines = fd.get("service_lines", [])
-        for i, y in enumerate(line_y):
-            sl = service_lines[i] if i < len(service_lines) else {}
-            if not sl:
-                continue
-
-            def draw_sl(key, x):
-                txt = str(sl.get(key, "") or "").strip()
-                if txt:
-                    sl_field = f"sl{i+1}_{key}"
-                    ax, ay = self._preview_aligned_xy(sl_field, x, y, section_offsets, field_offsets)
-                    cv.create_text(sx(ax), sy(ay), text=txt, anchor="nw", fill="black", font=("Arial", line_size))
-
-            draw_sl("from_date", 47)
-            draw_sl("to_date", 162)
-            draw_sl("pos", 285)
-            draw_sl("cpt", 369)
-            draw_sl("modifier", 468)
-            draw_sl("dx_ptr", 648)
-            draw_sl("charge", 769)
-            draw_sl("units", 872)
-            draw_sl("epsdt", 919)
-            draw_sl("family_plan", 946)
-            draw_sl("id_qual", 979)
-            draw_sl("npi", 1000)
-
-    def _refresh_claims(self):
-        self.claim_tv.delete(*self.claim_tv.get_children())
-        conn = db.get_connection()
-        rows = conn.execute(
-            """SELECT c.id, p.last_name||', '||p.first_name AS nm, c.billing_date, c.claim_status
-               FROM cms_claims c JOIN patients p ON c.patient_id=p.id
-               ORDER BY c.billing_date DESC LIMIT 200"""
-        ).fetchall()
-        conn.close()
-        for r in rows:
-            self.claim_tv.insert("", "end", iid=str(r["id"]),
-                                 values=(r["id"], r["nm"], fmt_date(r["billing_date"]), r["claim_status"]))
-
-    def _new_claim(self):
-        for v in self._cv.values():
-            v.set("")
-        for sl in self._sl_vars:
-            for v in sl.values():
-                v.set("")
-        self._current_pid = None
-        self._current_sessions = []
-        prov = db.get_provider()
-        self._cv["tax_id"].set(prov.get("tax_id",""))
-        self._cv["billing_npi"].set(prov.get("npi",""))
-        self._cv["billing_name"].set(prov.get("practice_name",""))
-        self._cv["billing_address"].set(prov.get("address",""))
-        self._cv["billing_date"].set(date.today().strftime("%m/%d/%Y"))
-        if int(prov.get("accept_assign", 1) or 0):
-            self._cv["accept_assign_yes"].set("X")
-            self._cv["accept_assign_no"].set("")
-        else:
-            self._cv["accept_assign_yes"].set("")
-            self._cv["accept_assign_no"].set("X")
-
-    def _open_claim(self, event=None):
-        sel = self.claim_tv.selection()
-        if not sel:
-            messagebox.showinfo("Select", "Please select a claim to open.")
-            return
-        cid = int(sel[0])
-        conn = db.get_connection()
-        claim = conn.execute("SELECT * FROM cms_claims WHERE id=?", (cid,)).fetchone()
-        conn.close()
-        if not claim:
-            return
-        try:
-            fd = json.loads(claim["form_data"])
-        except (json.JSONDecodeError, TypeError):
-            fd = {}
-        # Backward compatibility for saved claims that used a single accept_assign value.
-        if "accept_assign_yes" not in fd and "accept_assign_no" not in fd and "accept_assign" in fd:
-            if str(fd.get("accept_assign", "")).strip().lower() in {"1", "true", "yes", "y", "x"}:
-                fd["accept_assign_yes"] = "X"
-                fd["accept_assign_no"] = ""
-            else:
-                fd["accept_assign_yes"] = ""
-                fd["accept_assign_no"] = "X"
-        self._apply_relation_checkboxes(fd)
-        self._current_pid = claim["patient_id"]
-
-        def _fmt_amount(value):
-            try:
-                return f"{float(value):.2f}"
-            except (ValueError, TypeError):
-                return str(value) if value is not None else ""
-
-        for key, var in self._cv.items():
-            if key in fd:
-                value = fd[key]
-                if key in {"outside_lab_charge", "total_charge", "amount_paid"}:
-                    value = _fmt_amount(value)
-                var.set(str(value) if value is not None else "")
-        sls = fd.get("service_lines", [])
-        for i, sl_vars in enumerate(self._sl_vars):
-            sl = sls[i] if i < len(sls) else {}
-            for key, var in sl_vars.items():
-                value = sl.get(key, "")
-                if key == "charge":
-                    value = _fmt_amount(value)
-                var.set(str(value) if value is not None else "")
+            messagebox.showerror("Print", f"Could not print PDF:\n{ex}")
 
 
 # ─── Reports Tab ───────────────────────────────────────────────────────────────
@@ -4036,12 +2778,12 @@ class TheraTrakApp(tk.Tk):
             "TheraTrak Pro\n"
             f"Version: {self._version}\n"
             f"{user_line}"
-            "Combined Therapy Practice Management & CMS-1500 Billing\n\n"
+            "Combined Therapy Practice Management + CMS-1500\n\n"
             "Features:\n"
             "  • Patient management & demographics\n"
             "  • Session notes with DSM-5 / ICD-10 lookup\n"
             "  • Billing ledger & payment tracking\n"
-            "  • CMS-1500 claim form + PDF export\n"
+            "  • CMS-1500 fillable PDF (preview + print)\n"
             "  • Reports & CSV data export\n"
             "  • Data migration from Notes 444 files\n\n"
             f"Database: {db.DB_PATH}"
@@ -4320,8 +3062,8 @@ class TheraTrakApp(tk.Tk):
             "5. Use the 'Import Patients/Sessions/Billing (CSV)' buttons\n\n"
             "The importer is flexible with column names and will\n"
             "attempt to map fields automatically.\n\n"
-            "For billing (CMS-1500), your settings are entered once\n"
-            "in Settings → Provider/Practice."
+            "For billing and CMS-1500, your settings are entered once\n"
+            "in Settings -> Provider/Practice."
         )
 
     def _on_close(self):
