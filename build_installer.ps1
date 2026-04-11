@@ -40,10 +40,22 @@ $pyInstallerArgs = @(
     '--workpath', (Join-Path $buildDir 'app'),
     '--specpath', $buildDir,
     '--add-data', ($assetsDir + ';assets'),
+    '--hidden-import', 'pypdf',
+    '--hidden-import', 'pypdf.generic',
     $mainPy
 )
 
 & $python @pyInstallerArgs
+
+# Copy CMS-1500 fillable template into the app dist folder so it ships with the installer.
+$cmsTemplate = Join-Path $root 'CMS1500_template.pdf'
+$cmsTemplateDest = Join-Path $distDir 'TheraTrak Pro\CMS1500_template.pdf'
+if (Test-Path $cmsTemplate) {
+    Copy-Item $cmsTemplate $cmsTemplateDest -Force
+    Write-Host "Copied CMS1500_template.pdf to dist."
+} else {
+    Write-Warning "CMS1500_template.pdf not found at '$cmsTemplate' — installer will ship without it."
+}
 
 $uninstallerArgs = @(
     '-m', 'PyInstaller',
