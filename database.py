@@ -294,6 +294,8 @@ def _migrate_provider_settings_table():
     new_columns = [
         ("id_qualifier", "TEXT DEFAULT 'ZZ'"),
         ("provider_suffix", "TEXT DEFAULT ''"),
+        ("cms_overlay_offset_x", "REAL DEFAULT 0.0"),
+        ("cms_overlay_offset_y", "REAL DEFAULT 0.0"),
     ]
     conn = get_connection()
     cur = conn.cursor()

@@ -655,6 +655,8 @@ def fill_cms1500_overlay_pdf(
     template_path: str | Path,
     output_path: str | Path,
     form_data: Dict[str, object],
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
 ) -> str:
     """Render populated CMS field values only (no form background) for pre-printed paper."""
     import fitz
@@ -687,12 +689,12 @@ def fill_cms1500_overlay_pdf(
                 font_size = 10 if norm_widget.startswith("33billingprovidername") else 11
 
                 # Bottom-left text baseline placement inside each field box.
-                x = widget.rect.x0 + 1.0
-                y = widget.rect.y1 - 1.6
+                x = widget.rect.x0 + 1.0 + offset_x
+                y = widget.rect.y1 - 1.6 + offset_y
 
                 if field_name.startswith("F CHARGESRow"):
                     text_w = fitz.get_text_length(val, fontname="helv", fontsize=font_size)
-                    x = max(widget.rect.x0 + 1.0, widget.rect.x1 - text_w - 1.0)
+                    x = max(widget.rect.x0 + 1.0 + offset_x, widget.rect.x1 - text_w - 1.0 + offset_x)
 
                 page.insert_text(
                     fitz.Point(x, y),

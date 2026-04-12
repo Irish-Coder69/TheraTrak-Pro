@@ -1928,6 +1928,7 @@ class CMS1500Tab(ttk.Frame):
         btn(tb, "Print Preview", self._print_preview).pack(side="left", padx=4)
         btn(tb, "Print", self._print_form).pack(side="left", padx=4)
         btn(tb, "Export PDF", self._export_pdf).pack(side="left", padx=4)
+        btn(tb, "Align Overlay", self._align_overlay).pack(side="left", padx=4)
 
         frm = lframe(self, "CMS-1500 Paper Form")
         frm.pack(fill="both", expand=True, padx=8, pady=(0, 8))
@@ -2126,7 +2127,11 @@ class CMS1500Tab(ttk.Frame):
         back_template = _resolve_cms_back_template()
         try:
             if render_mode == "overlay":
-                fill_cms1500_overlay_pdf(CMS_TEMPLATE_FILE, output_path, data)
+                provider = db.get_provider()
+                offset_x = float(provider.get("cms_overlay_offset_x") or 0.0) * 72.0
+                offset_y = float(provider.get("cms_overlay_offset_y") or 0.0) * 72.0
+                fill_cms1500_overlay_pdf(CMS_TEMPLATE_FILE, output_path, data,
+                                         offset_x=offset_x, offset_y=offset_y)
             elif render_mode == "front_only":
                 fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=None)
             else:
@@ -2407,6 +2412,71 @@ class CMS1500Tab(ttk.Frame):
             txt.insert("1.0", "\n".join(lines))
 
         txt.config(state="disabled")
+
+    def _align_overlay(self):
+        """Open a dialog to set X/Y alignment offsets for pre-printed form overlay printing."""
+        provider = db.get_provider()
+        cur_x = float(provider.get("cms_overlay_offset_x") or 0.0)
+        cur_y = float(provider.get("cms_overlay_offset_y") or 0.0)
+
+        dlg = tk.Toplevel(self)
+        apply_window_icon(dlg)
+        dlg.title("Pre-Printed Form Alignment")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        ttk.Label(
+            dlg,
+            text=(
+                "Adjust where text is placed when printing on pre-printed CMS forms.\n"
+                "Positive values shift text right/down; negative values shift left/up.\n"
+                "Enter values in inches (e.g. 0.1, -0.05)."
+            ),
+            justify="left",
+        ).grid(row=0, column=0, columnspan=2, padx=12, pady=(12, 6), sticky="w")
+
+        ttk.Label(dlg, text="Horizontal shift (inches):").grid(row=1, column=0, padx=12, pady=4, sticky="w")
+        sv_x = tk.StringVar(value=f"{cur_x:.3f}".rstrip("0").rstrip(".") or "0")
+        ttk.Entry(dlg, textvariable=sv_x, width=10).grid(row=1, column=1, padx=12, pady=4, sticky="w")
+
+        ttk.Label(dlg, text="Vertical shift (inches):").grid(row=2, column=0, padx=12, pady=4, sticky="w")
+        sv_y = tk.StringVar(value=f"{cur_y:.3f}".rstrip("0").rstrip(".") or "0")
+        ttk.Entry(dlg, textvariable=sv_y, width=10).grid(row=2, column=1, padx=12, pady=4, sticky="w")
+
+        ttk.Label(
+            dlg,
+            text="Tip: print a test page, measure how far the text missed each box,\nand enter that distance here.",
+            foreground="gray",
+            justify="left",
+        ).grid(row=3, column=0, columnspan=2, padx=12, pady=(2, 8), sticky="w")
+
+        def _save():
+            try:
+                x_val = float(sv_x.get())
+                y_val = float(sv_y.get())
+            except ValueError:
+                messagebox.showerror("Alignment", "Please enter valid numbers for both offsets.", parent=dlg)
+                return
+            if abs(x_val) > 2.0 or abs(y_val) > 2.0:
+                messagebox.showerror(
+                    "Alignment",
+                    "Offsets larger than 2 inches are unlikely to be correct.\nPlease re-check the values.",
+                    parent=dlg,
+                )
+                return
+            db.save_provider({"cms_overlay_offset_x": x_val, "cms_overlay_offset_y": y_val})
+            messagebox.showinfo("Alignment", "Overlay alignment saved.", parent=dlg)
+            dlg.destroy()
+
+        def _reset():
+            sv_x.set("0")
+            sv_y.set("0")
+
+        btn_row = ttk.Frame(dlg)
+        btn_row.grid(row=4, column=0, columnspan=2, pady=(0, 12))
+        ttk.Button(btn_row, text="Save", command=_save).pack(side="left", padx=6)
+        ttk.Button(btn_row, text="Reset to 0", command=_reset).pack(side="left", padx=6)
+        ttk.Button(btn_row, text="Cancel", command=dlg.destroy).pack(side="left", padx=6)
 
     def _export_pdf(self):
         path = filedialog.asksaveasfilename(
