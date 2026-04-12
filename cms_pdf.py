@@ -590,8 +590,8 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
             needs_update = True
 
         try:
-            # Box 33 name needs slightly smaller text to avoid clipping.
-            target_size = 9 if norm_widget.startswith("33billingprovidername") else 11
+            # Box 33 billing provider name gets a modest size bump for readability.
+            target_size = 10 if norm_widget.startswith("33billingprovidername") else 11
             if getattr(widget, "text_fontsize", None) != target_size:
                 widget.text_fontsize = target_size
                 needs_update = True
