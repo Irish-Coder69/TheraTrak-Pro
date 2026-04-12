@@ -540,12 +540,22 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     # Collect all field names from the template widgets.
     template_fields = [w.field_name for w in page.widgets()]
     field_values = map_form_data_to_template_fields(form_data, template_fields)
+    state_overlays: list[tuple[object, str]] = []
 
     # Update each widget value and enforce 11pt field text for consistent print output.
     for widget in page.widgets():
         norm_widget = _normalize(widget.field_name or "")
         val = field_values.get(widget.field_name, "")
         needs_update = False
+
+        # Box 32/33 state widgets can render stale artifacts in some PDF viewers.
+        # Render them as static overlay text after blanking widget appearances.
+        if norm_widget in {"servicefacilitystate", "billingstate"}:
+            state_overlays.append((widget.rect, _state_abbrev(val)))
+            if widget.field_value:
+                widget.field_value = ""
+            widget.update()
+            continue
 
         # Ensure all line-item charges (24F) render right-aligned.
         if (widget.field_name or "").startswith("F CHARGESRow"):
@@ -584,6 +594,29 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
 
         if needs_update:
             widget.update()
+
+    if state_overlays:
+        shape = page.new_shape()
+        for rect, value in state_overlays:
+            inner = fitz.Rect(rect.x0 + 0.7, rect.y0 + 0.7, rect.x1 - 0.7, rect.y1 - 0.7)
+            shape.draw_rect(inner)
+            shape.finish(fill=(1, 1, 1), color=None, width=0)
+        shape.commit()
+
+        for rect, value in state_overlays:
+            if not value:
+                continue
+            inner = fitz.Rect(rect.x0 + 0.7, rect.y0 + 0.7, rect.x1 - 0.7, rect.y1 - 0.7)
+            if value:
+                # Use explicit text insertion to avoid textbox fit quirks in narrow state fields.
+                page.insert_text(
+                    fitz.Point(inner.x0 + 1.0, inner.y1 - 1.6),
+                    value,
+                    fontsize=10,
+                    fontname="helv",
+                    color=(0, 0, 0),
+                    overlay=True,
+                )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
