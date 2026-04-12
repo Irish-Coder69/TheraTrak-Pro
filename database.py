@@ -70,6 +70,14 @@ def initialize_db():
         dx2              TEXT DEFAULT '',
         dx3              TEXT DEFAULT '',
         dx4              TEXT DEFAULT '',
+        dx5              TEXT DEFAULT '',
+        dx6              TEXT DEFAULT '',
+        dx7              TEXT DEFAULT '',
+        dx8              TEXT DEFAULT '',
+        dx9              TEXT DEFAULT '',
+        dx10             TEXT DEFAULT '',
+        dx11             TEXT DEFAULT '',
+        dx12             TEXT DEFAULT '',
         emr_name         TEXT DEFAULT '',
         emr_relation     TEXT DEFAULT '',
         emr_phone        TEXT DEFAULT '',
@@ -99,6 +107,14 @@ def initialize_db():
         dx2              TEXT DEFAULT '',
         dx3              TEXT DEFAULT '',
         dx4              TEXT DEFAULT '',
+        dx5              TEXT DEFAULT '',
+        dx6              TEXT DEFAULT '',
+        dx7              TEXT DEFAULT '',
+        dx8              TEXT DEFAULT '',
+        dx9              TEXT DEFAULT '',
+        dx10             TEXT DEFAULT '',
+        dx11             TEXT DEFAULT '',
+        dx12             TEXT DEFAULT '',
         fee              REAL DEFAULT 0.0,
         note_text        TEXT DEFAULT '',
         goals            TEXT DEFAULT '',
@@ -199,6 +215,7 @@ def initialize_db():
     conn.close()
 
     _migrate_patients_table()
+    _migrate_session_notes_table()
     _migrate_users_table()
     _migrate_provider_settings_table()
     _seed_dsm_codes()
@@ -209,6 +226,14 @@ def _migrate_patients_table():
     new_columns = [
         ("sig_on_file_date", "TEXT DEFAULT ''"),
         ("referring_taxonomy", "TEXT DEFAULT ''"),
+        ("dx5", "TEXT DEFAULT ''"),
+        ("dx6", "TEXT DEFAULT ''"),
+        ("dx7", "TEXT DEFAULT ''"),
+        ("dx8", "TEXT DEFAULT ''"),
+        ("dx9", "TEXT DEFAULT ''"),
+        ("dx10", "TEXT DEFAULT ''"),
+        ("dx11", "TEXT DEFAULT ''"),
+        ("dx12", "TEXT DEFAULT ''"),
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -216,6 +241,28 @@ def _migrate_patients_table():
     for col, col_def in new_columns:
         if col not in existing:
             cur.execute(f"ALTER TABLE patients ADD COLUMN {col} {col_def}")
+    conn.commit()
+    conn.close()
+
+
+def _migrate_session_notes_table():
+    """Add any missing columns to session_notes (forward migration)."""
+    new_columns = [
+        ("dx5", "TEXT DEFAULT ''"),
+        ("dx6", "TEXT DEFAULT ''"),
+        ("dx7", "TEXT DEFAULT ''"),
+        ("dx8", "TEXT DEFAULT ''"),
+        ("dx9", "TEXT DEFAULT ''"),
+        ("dx10", "TEXT DEFAULT ''"),
+        ("dx11", "TEXT DEFAULT ''"),
+        ("dx12", "TEXT DEFAULT ''"),
+    ]
+    conn = get_connection()
+    cur = conn.cursor()
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(session_notes)").fetchall()}
+    for col, col_def in new_columns:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE session_notes ADD COLUMN {col} {col_def}")
     conn.commit()
     conn.close()
 

@@ -123,7 +123,7 @@ def import_patients_csv(path: str) -> tuple[int, list[str]]:
     Import patients from a CSV file exported from Notes 444.
     Expected columns (case-insensitive, flexible):
       Last Name, First Name, DOB, Sex, Address, City, State, Zip,
-      Phone, Cell, Email, Insurance, Ins ID, Ins Group, Dx1–Dx4, Status
+            Phone, Cell, Email, Insurance, Ins ID, Ins Group, Dx1–Dx12, Status
     Returns (count_imported, list_of_warnings).
     """
     imported = 0
@@ -174,6 +174,14 @@ def import_patients_csv(path: str) -> tuple[int, list[str]]:
                 "dx2":         col(row, "dx2", "diagnosis 2", "diag2", "icd 2"),
                 "dx3":         col(row, "dx3", "diagnosis 3"),
                 "dx4":         col(row, "dx4", "diagnosis 4"),
+                "dx5":         col(row, "dx5", "diagnosis 5"),
+                "dx6":         col(row, "dx6", "diagnosis 6"),
+                "dx7":         col(row, "dx7", "diagnosis 7"),
+                "dx8":         col(row, "dx8", "diagnosis 8"),
+                "dx9":         col(row, "dx9", "diagnosis 9"),
+                "dx10":        col(row, "dx10", "diagnosis 10"),
+                "dx11":        col(row, "dx11", "diagnosis 11"),
+                "dx12":        col(row, "dx12", "diagnosis 12"),
                 "intake_date": _parse_date(col(row, "intake", "intake date", "start date")),
                 "status":      col(row, "status") or "Active",
                 "notes":       col(row, "notes", "comment"),
@@ -192,7 +200,7 @@ def import_sessions_csv(path: str) -> tuple[int, list[str]]:
     """
     Import session notes from a CSV export of PtNotes.444.
     Expected columns: Patient ID (or Last Name/First Name), Session Date,
-    Session Type, Duration, CPT Code, Dx1–Dx4, Fee, Notes
+    Session Type, Duration, CPT Code, Dx1–Dx12, Fee, Notes
     """
     imported = 0
     warnings = []
@@ -260,6 +268,14 @@ def import_sessions_csv(path: str) -> tuple[int, list[str]]:
                 "dx2":              col(row, "dx2", "diagnosis 2"),
                 "dx3":              col(row, "dx3"),
                 "dx4":              col(row, "dx4"),
+                "dx5":              col(row, "dx5", "diagnosis 5"),
+                "dx6":              col(row, "dx6", "diagnosis 6"),
+                "dx7":              col(row, "dx7", "diagnosis 7"),
+                "dx8":              col(row, "dx8", "diagnosis 8"),
+                "dx9":              col(row, "dx9", "diagnosis 9"),
+                "dx10":             col(row, "dx10", "diagnosis 10"),
+                "dx11":             col(row, "dx11", "diagnosis 11"),
+                "dx12":             col(row, "dx12", "diagnosis 12"),
                 "fee":              fee,
                 "note_text":        col(row, "note", "notes", "progress note", "soap"),
                 "goals":            col(row, "goal", "goals"),
@@ -432,7 +448,7 @@ def write_patients_template(path: str) -> None:
         "Phone Home", "Phone Cell", "Phone Work",
         "Email",
         "Insurance", "Ins ID", "Ins Group", "Ins Plan", "Ins Holder", "Ins Relation",
-        "Dx1", "Dx2", "Dx3", "Dx4",
+        "Dx1", "Dx2", "Dx3", "Dx4", "Dx5", "Dx6", "Dx7", "Dx8", "Dx9", "Dx10", "Dx11", "Dx12",
         "Intake Date",
         "Status",
         "Notes",
@@ -446,7 +462,7 @@ def write_patients_template(path: str) -> None:
         "(217) 555-1234", "(217) 555-5678", "",
         "jane.smith@email.com",
         "BlueCross BlueShield", "XYZ123456", "GRP001", "", "Jane Smith", "Self",
-        "F32.1", "", "", "",
+        "F32.1", "", "", "", "", "", "", "", "", "", "", "",
         "03/01/2024",
         "Active",
         "",
@@ -466,7 +482,7 @@ def write_sessions_template(path: str) -> None:
         "Session Type",
         "Place of Service",
         "CPT Code", "Modifier",
-        "Dx1", "Dx2", "Dx3", "Dx4",
+        "Dx1", "Dx2", "Dx3", "Dx4", "Dx5", "Dx6", "Dx7", "Dx8", "Dx9", "Dx10", "Dx11", "Dx12",
         "Fee",
         "Notes",
         "Goals", "Interventions", "Response", "Plan",
@@ -479,7 +495,7 @@ def write_sessions_template(path: str) -> None:
         "Individual",
         "11",
         "90837", "",
-        "F32.1", "", "", "",
+        "F32.1", "", "", "", "", "", "", "", "", "", "", "",
         "150.00",
         "Patient reported improvement.",
         "", "", "", "",

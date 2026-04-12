@@ -76,6 +76,7 @@ CMS_TEMPLATE_FILE = APP_ROOT / "CMS1500_template.pdf"
 # Build lookup mapping for place of service codes
 _PLACE_CODE_MAP = {p[0]: p[1] for p in PLACE_CODES}
 _PLACE_CODE_REVERSE = {p[1]: p[0] for p in PLACE_CODES}
+PATIENT_DX_KEYS = [f"dx{i}" for i in range(1, 13)]
 
 
 # ─── Utilities ─────────────────────────────────────────────────────────────────
@@ -901,13 +902,17 @@ class PatientDialog(tk.Toplevel):
         # Diagnoses
         dx_frame = lframe(f1, "Primary Diagnoses (ICD-10)")
         dx_frame.grid(row=8, column=0, columnspan=6, sticky="ew", pady=(10, 4))
-        for i, dx in enumerate(["dx1", "dx2", "dx3", "dx4"]):
-            ttk.Label(dx_frame, text=f"Dx {i+1}").grid(row=0, column=i*2, sticky="e", padx=4)
+        for c in range(12):
+            dx_frame.columnconfigure(c, weight=1)
+        for i, dx in enumerate(PATIENT_DX_KEYS):
+            row = i // 6
+            col = (i % 6) * 2
+            ttk.Label(dx_frame, text=f"Dx {i+1}").grid(row=row, column=col, sticky="e", padx=4, pady=2)
             e = ttk.Entry(dx_frame, textvariable=self._fld(dx), width=12)
-            e.grid(row=0, column=i*2+1, sticky="w", padx=(0,4))
+            e.grid(row=row, column=col+1, sticky="w", padx=(0,4), pady=2)
 
         b_dx = ttk.Frame(dx_frame)
-        b_dx.grid(row=1, column=0, columnspan=8, pady=4)
+        b_dx.grid(row=2, column=0, columnspan=12, pady=4)
         ttk.Button(b_dx, text="Lookup DSM Code",
                    command=lambda: DSMPicker(self, self._dx_pick)).pack(side="left", padx=4)
 
@@ -985,11 +990,11 @@ class PatientDialog(tk.Toplevel):
 
     def _dx_pick(self, code):
         # Fill the first empty dx slot
-        for key in ["dx1", "dx2", "dx3", "dx4"]:
+        for key in PATIENT_DX_KEYS:
             if not self._vars[key].get():
                 self._vars[key].set(code)
                 return
-        self._vars["dx4"].set(code)
+        self._vars[PATIENT_DX_KEYS[-1]].set(code)
 
     def _load(self):
         pt = db.get_patient(self.pid)
@@ -1085,12 +1090,15 @@ class SessionDialog(tk.Toplevel):
         # Diagnoses row
         dx_frame = lframe(self, "Diagnoses")
         dx_frame.pack(fill="x", padx=10, pady=4)
-        for c in range(8): dx_frame.columnconfigure(c, weight=1)
-        for i, dx in enumerate(["dx1","dx2","dx3","dx4"]):
-            ttk.Label(dx_frame, text=f"Dx {i+1}").grid(row=0, column=i*2, sticky="e", padx=4)
-            ttk.Entry(dx_frame, textvariable=self._fld(dx), width=10).grid(row=0, column=i*2+1, sticky="w", padx=(0,6))
+        for c in range(12):
+            dx_frame.columnconfigure(c, weight=1)
+        for i, dx in enumerate(PATIENT_DX_KEYS):
+            row = i // 6
+            col = (i % 6) * 2
+            ttk.Label(dx_frame, text=f"Dx {i+1}").grid(row=row, column=col, sticky="e", padx=4, pady=2)
+            ttk.Entry(dx_frame, textvariable=self._fld(dx), width=10).grid(row=row, column=col+1, sticky="w", padx=(0,6), pady=2)
         ttk.Button(dx_frame, text="Lookup Code",
-                   command=lambda: DSMPicker(self, self._dx_pick)).grid(row=1, column=0, columnspan=8, pady=4)
+                   command=lambda: DSMPicker(self, self._dx_pick)).grid(row=2, column=0, columnspan=12, pady=4)
 
         # Note text
         nb2 = ttk.Notebook(self)
@@ -1129,11 +1137,11 @@ class SessionDialog(tk.Toplevel):
         self.pt_combo["values"] = names
 
     def _dx_pick(self, code):
-        for key in ["dx1","dx2","dx3","dx4"]:
+        for key in PATIENT_DX_KEYS:
             if not self._vars[key].get():
                 self._vars[key].set(code)
                 return
-        self._vars["dx4"].set(code)
+        self._vars[PATIENT_DX_KEYS[-1]].set(code)
 
     def _load(self):
         s = db.get_session(self.sid)
@@ -1778,6 +1786,14 @@ class CMS1500Tab(ttk.Frame):
             ("Diagnosis 2", "dx2"),
             ("Diagnosis 3", "dx3"),
             ("Diagnosis 4", "dx4"),
+            ("Diagnosis 5", "dx5"),
+            ("Diagnosis 6", "dx6"),
+            ("Diagnosis 7", "dx7"),
+            ("Diagnosis 8", "dx8"),
+            ("Diagnosis 9", "dx9"),
+            ("Diagnosis 10", "dx10"),
+            ("Diagnosis 11", "dx11"),
+            ("Diagnosis 12", "dx12"),
             ("Service Date", "service_date"),
             ("Illness Date", "illness_date"),
             ("Other Date", "other_date"),
@@ -1879,6 +1895,8 @@ class CMS1500Tab(ttk.Frame):
 
         self._paper_status = ttk.Label(frm, text="Loading CMS-1500 template...", foreground=MUTED)
         self._paper_status.pack(anchor="w", padx=6, pady=(0, 4))
+        self._dx_usage_hint = ttk.Label(frm, text="Diagnoses used: 0/12", foreground=MUTED)
+        self._dx_usage_hint.pack(anchor="w", padx=6, pady=(0, 6))
 
         self.after(120, self._open_blank_template)
 
@@ -1953,6 +1971,7 @@ class CMS1500Tab(ttk.Frame):
         def apply_and_refresh():
             # Keep any structured service lines while reflecting edited scalar values.
             self._current_data.update({k: v.get().strip() for k, v in self._vars.items()})
+            self._update_dx_usage_hint(self._current_data)
             self._refresh_paper_preview()
             win.destroy()
 
@@ -1989,13 +2008,20 @@ class CMS1500Tab(ttk.Frame):
     def _open_blank_template(self):
         if not self._ensure_template():
             return
+        self._update_dx_usage_hint()
         self._render_pdf_in_canvas(CMS_TEMPLATE_FILE)
+
+    def _update_dx_usage_hint(self, data=None):
+        source = data if isinstance(data, dict) else {k: v.get().strip() for k, v in self._vars.items()}
+        used = sum(1 for key in PATIENT_DX_KEYS if source.get(key, "").strip())
+        self._dx_usage_hint.config(text=f"Diagnoses used: {used}/12")
 
     def _refresh_paper_preview(self):
         preview_path = APP_ROOT / "temp" / "CMS1500_live_paper_preview.pdf"
         saved = self._fill_to_path(preview_path)
         if not saved:
             return None
+        self._update_dx_usage_hint(self._current_data)
         self._last_preview_path = saved
         self._render_pdf_in_canvas(saved)
         return saved
@@ -2133,12 +2159,13 @@ class CMS1500Tab(ttk.Frame):
         insured_phone = g(patient, "ins_phone") or g(patient, "phone_home") or g(patient, "phone_cell")
         patient_phone = g(patient, "phone_home") or g(patient, "phone_cell") or g(patient, "phone_work")
 
-        # Build per-row diagnosis pointer: use "A" if only dx1 is set, or all
-        # applicable pointers based on which of dx1-dx4 this session carry.
+        claim_dx_values = [g(first, k) or g(patient, k) for k in PATIENT_DX_KEYS]
+
+        # Build per-row diagnosis pointer: use "A" if no diagnoses are set, or
+        # all applicable pointers based on which of dx1-dx12 this session/claim carry.
         def dx_pointer_for(sess) -> str:
-            letters = "ABCD"
-            dx_keys = ["dx1", "dx2", "dx3", "dx4"]
-            ptrs = [letters[i] for i, k in enumerate(dx_keys) if g(sess, k) or g(first, k)]
+            letters = "ABCDEFGHIJKL"
+            ptrs = [letters[i] for i, k in enumerate(PATIENT_DX_KEYS) if g(sess, k) or claim_dx_values[i]]
             return " ".join(ptrs) if ptrs else "A"
 
         service_lines = [
@@ -2185,10 +2212,18 @@ class CMS1500Tab(ttk.Frame):
             "patient_state": g(patient, "state"),
             "patient_zip": g(patient, "zip"),
             "patient_phone": patient_phone,
-            "dx1": g(first, "dx1") or g(patient, "dx1"),
-            "dx2": g(first, "dx2") or g(patient, "dx2"),
-            "dx3": g(first, "dx3") or g(patient, "dx3"),
-            "dx4": g(first, "dx4") or g(patient, "dx4"),
+            "dx1": claim_dx_values[0],
+            "dx2": claim_dx_values[1],
+            "dx3": claim_dx_values[2],
+            "dx4": claim_dx_values[3],
+            "dx5": claim_dx_values[4],
+            "dx6": claim_dx_values[5],
+            "dx7": claim_dx_values[6],
+            "dx8": claim_dx_values[7],
+            "dx9": claim_dx_values[8],
+            "dx10": claim_dx_values[9],
+            "dx11": claim_dx_values[10],
+            "dx12": claim_dx_values[11],
             # Row-1 scalar fallbacks (used when service_lines is ignored)
             "service_date": g(first, "session_date"),
             "illness_date": "",
@@ -2259,6 +2294,7 @@ class CMS1500Tab(ttk.Frame):
         self._current_pid = pid
         self._current_sessions = sessions
         self._current_data = data  # retained for PDF fill
+        self._update_dx_usage_hint(data)
         self._refresh_paper_preview()
 
     def _show_template_fields(self):
