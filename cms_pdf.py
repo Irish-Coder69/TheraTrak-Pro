@@ -461,7 +461,8 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
             else:
                 value = prov_name
         elif norm_field == "signaturedate":
-            value = get("provider_signature_date")
+            # Box 12 date should come from patient demographics (Sig on File Date).
+            value = get("patient_signature_date") or get("provider_signature_date")
         elif norm_field == "providerdate":
             value = get("provider_signature_date")
         elif norm_field.startswith("17nameofreferringprovider"):

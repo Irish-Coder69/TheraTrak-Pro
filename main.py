@@ -2254,6 +2254,7 @@ class CMS1500Tab(ttk.Frame):
             "provider_signature": g(provider, "sig_on_file", "Signature On File"),
             "provider_name": rendering_provider_name or provider_name,
             "provider_suffix": g(provider, "provider_suffix"),
+            "patient_signature_date": g(patient, "sig_on_file_date"),
             "provider_signature_date": datetime.now().strftime('%m/%d/%Y'),
             "accept_assignment": "YES" if str(g(provider, "accept_assign", "1")) in {"1", "true", "True", "YES", "yes"} else "NO",
             "federal_tax_id_type": g(provider, "tax_id_type", "EIN"),
