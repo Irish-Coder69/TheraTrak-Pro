@@ -454,7 +454,12 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field.startswith("13insuredssignature"):
             value = get("provider_signature")
         elif norm_field.startswith("31providersignature"):
-            value = get("provider_name") or get("billing_name")
+            prov_name = get("provider_name") or get("billing_name")
+            prov_suffix = get("provider_suffix")
+            if prov_suffix:
+                value = f"{prov_name}, {prov_suffix}" if prov_name else prov_suffix
+            else:
+                value = prov_name
         elif norm_field == "signaturedate":
             value = get("provider_signature_date")
         elif norm_field == "providerdate":
