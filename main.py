@@ -6,7 +6,6 @@ Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 """
 
 import json
-import ctypes
 import io
 import os
 import re
@@ -109,15 +108,40 @@ def _resolve_cms_back_template() -> Path | None:
 def _get_default_printer_name() -> str:
     if not sys.platform.startswith("win"):
         return ""
-    needed = ctypes.c_ulong(0)
-    get_default_printer = ctypes.windll.winspool.drv.GetDefaultPrinterW
-    get_default_printer(None, ctypes.byref(needed))
-    if needed.value <= 1:
-        return ""
-    buffer = ctypes.create_unicode_buffer(needed.value)
-    if not get_default_printer(buffer, ctypes.byref(needed)):
-        return ""
-    return buffer.value.strip()
+
+    # Avoid direct Winspool DLL calls in frozen builds; query via shell instead.
+    commands = [
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            "(Get-CimInstance Win32_Printer | Where-Object {$_.Default} | Select-Object -First 1 -ExpandProperty Name)",
+        ],
+        [
+            "pwsh.exe",
+            "-NoProfile",
+            "-Command",
+            "(Get-CimInstance Win32_Printer | Where-Object {$_.Default} | Select-Object -First 1 -ExpandProperty Name)",
+        ],
+    ]
+
+    for cmd in commands:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if result.returncode == 0:
+                name = (result.stdout or "").strip()
+                if name:
+                    return name
+        except OSError:
+            continue
+
+    return ""
 
 
 def _open_printer_preferences(printer_name: str) -> bool:
