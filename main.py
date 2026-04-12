@@ -1915,6 +1915,7 @@ class CMS1500Tab(ttk.Frame):
         self._current_data = {}
         self._last_preview_path = None
         self._paper_image = None
+        self._duplex_prefs_prompted_on = ""
         self._build()
 
     def _build(self):
@@ -2429,33 +2430,58 @@ class CMS1500Tab(ttk.Frame):
 
         try:
             if sys.platform.startswith("win"):
-                printer_name = _get_default_printer_name()
-                if not printer_name:
-                    messagebox.showerror(
-                        "Print",
-                        "No default printer is configured. Set a default printer, then try again.",
-                    )
+                paper_mode = messagebox.askyesnocancel(
+                    "Print Setup",
+                    "Are you printing on blank paper?\n\n"
+                    "Yes: Blank paper (front/back duplex workflow)\n"
+                    "No: Pre-printed CMS form\n"
+                    "Cancel: Do not print",
+                )
+                if paper_mode is None:
                     return
 
-                while True:
-                    if not _open_printer_preferences(printer_name):
-                        messagebox.showwarning(
-                            "Print Preferences",
-                            f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
-                        )
-                        break
+                uses_blank_paper = paper_mode is True
 
-                    ready = messagebox.askyesnocancel(
-                        "Ready To Print",
-                        f"Printer: {printer_name}\n\nSet 2-sided printing in Printing Preferences, click OK there, then choose an option below.\n\nYes: Print now\nNo: Reopen printing preferences\nCancel: Stop without printing",
-                    )
-                    if ready is True:
-                        break
-                    if ready is None:
+                if uses_blank_paper:
+                    printer_name = _get_default_printer_name()
+                    if not printer_name:
+                        messagebox.showerror(
+                            "Print",
+                            "No default printer is configured. Set a default printer, then try again.",
+                        )
                         return
 
+                    today_key = date.today().isoformat()
+                    should_open_preferences = self._duplex_prefs_prompted_on != today_key
+                    if should_open_preferences:
+                        if not _open_printer_preferences(printer_name):
+                            messagebox.showwarning(
+                                "Print Preferences",
+                                f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
+                            )
+                        self._duplex_prefs_prompted_on = today_key
+
+                    while True:
+                        ready = messagebox.askyesnocancel(
+                            "Ready To Print",
+                            f"Printer: {printer_name}\n\n"
+                            "Yes: Print now\n"
+                            "No: Reopen printing preferences\n"
+                            "Cancel: Stop without printing",
+                        )
+                        if ready is True:
+                            break
+                        if ready is None:
+                            return
+
+                        if not _open_printer_preferences(printer_name):
+                            messagebox.showwarning(
+                                "Print Preferences",
+                                f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
+                            )
+
                 os.startfile(str(saved), "print")
-                if back_template:
+                if uses_blank_paper and back_template:
                     messagebox.showinfo(
                         "Print",
                         "CMS-1500 sent to the default printer as a 2-page front/back PDF.",
