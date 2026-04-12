@@ -6,6 +6,7 @@ Python 3.10+  ·  Tkinter + ttk  ·  SQLite backend
 """
 
 import json
+import ctypes
 import io
 import os
 import re
@@ -72,6 +73,10 @@ GITHUB_RELEASES_PAGE = "https://github.com/Irish-Coder69/TheraTrak-Pro/releases/
 UPDATE_TEMP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Temp" / "TheraTrakUpdates"
 STARTUP_LOG_FILE = APP_ROOT / "startup.log"
 CMS_TEMPLATE_FILE = APP_ROOT / "CMS1500_template.pdf"
+CMS_BACK_TEMPLATE_CANDIDATES = (
+    APP_ROOT / "CMS1500_template_back.pdf",
+    APP_ROOT / "CMS 1500_templete_back.pdf",
+)
 
 # Build lookup mapping for place of service codes
 _PLACE_CODE_MAP = {p[0]: p[1] for p in PLACE_CODES}
@@ -92,6 +97,41 @@ def _extract_place_code(place_value: str, default: str = "11") -> str:
     if place_value in _PLACE_CODE_MAP:
         return _PLACE_CODE_MAP[place_value]
     return place_value
+
+
+def _resolve_cms_back_template() -> Path | None:
+    for candidate in CMS_BACK_TEMPLATE_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _get_default_printer_name() -> str:
+    if not sys.platform.startswith("win"):
+        return ""
+    needed = ctypes.c_ulong(0)
+    get_default_printer = ctypes.windll.winspool.drv.GetDefaultPrinterW
+    get_default_printer(None, ctypes.byref(needed))
+    if needed.value <= 1:
+        return ""
+    buffer = ctypes.create_unicode_buffer(needed.value)
+    if not get_default_printer(buffer, ctypes.byref(needed)):
+        return ""
+    return buffer.value.strip()
+
+
+def _open_printer_preferences(printer_name: str) -> bool:
+    if not sys.platform.startswith("win") or not printer_name:
+        return False
+    try:
+        result = subprocess.run(
+            ["rundll32.exe", "printui.dll,PrintUIEntry", "/e", "/n", printer_name],
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return result.returncode == 0
+    except OSError:
+        return False
 
 
 def _get_place_display(place_code: str) -> str:
@@ -2058,8 +2098,9 @@ class CMS1500Tab(ttk.Frame):
             return None
 
         data = self._collect_form_data()
+        back_template = _resolve_cms_back_template()
         try:
-            fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data)
+            fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=back_template)
             return output_path
         except Exception as ex:
             messagebox.showerror("CMS-1500", f"Could not generate PDF:\n{ex}")
@@ -2357,14 +2398,46 @@ class CMS1500Tab(ttk.Frame):
 
     def _print_form(self):
         print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        back_template = _resolve_cms_back_template()
         saved = self._fill_to_path(print_path)
         if not saved:
             return
 
         try:
             if sys.platform.startswith("win"):
+                printer_name = _get_default_printer_name()
+                if not printer_name:
+                    messagebox.showerror(
+                        "Print",
+                        "No default printer is configured. Set a default printer, then try again.",
+                    )
+                    return
+
+                while True:
+                    if not _open_printer_preferences(printer_name):
+                        messagebox.showwarning(
+                            "Print Preferences",
+                            f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
+                        )
+                        break
+
+                    ready = messagebox.askyesnocancel(
+                        "Ready To Print",
+                        f"Printer: {printer_name}\n\nSet 2-sided printing in Printing Preferences, click OK there, then choose an option below.\n\nYes: Print now\nNo: Reopen printing preferences\nCancel: Stop without printing",
+                    )
+                    if ready is True:
+                        break
+                    if ready is None:
+                        return
+
                 os.startfile(str(saved), "print")
-                messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
+                if back_template:
+                    messagebox.showinfo(
+                        "Print",
+                        "CMS-1500 sent to the default printer as a 2-page front/back PDF.",
+                    )
+                else:
+                    messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
             else:
                 webbrowser.open(saved.resolve().as_uri())
                 messagebox.showinfo("Print", f"Opened PDF for printing:\n{saved}")

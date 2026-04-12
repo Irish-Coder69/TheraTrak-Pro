@@ -59,6 +59,17 @@ if (Test-Path $cmsTemplate) {
     Write-Warning "CMS1500_template.pdf not found at path: $cmsTemplate. Installer will ship without it."
 }
 
+$cmsBackTemplates = @(
+    (Join-Path $root 'CMS1500_template_back.pdf'),
+    (Join-Path $root 'CMS 1500_templete_back.pdf')
+)
+$cmsBackTemplate = $cmsBackTemplates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($cmsBackTemplate) {
+    $cmsBackTemplateDest = Join-Path $distDir ('TheraTrak Pro\' + (Split-Path $cmsBackTemplate -Leaf))
+    Copy-Item $cmsBackTemplate $cmsBackTemplateDest -Force
+    Write-Host "Copied $(Split-Path $cmsBackTemplate -Leaf) to dist."
+}
+
 $uninstallerArgs = @(
     '-m', 'PyInstaller',
     '--noconfirm',

@@ -533,12 +533,18 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
     return mapped
 
 
-def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_data: Dict[str, object]) -> str:
+def fill_cms1500_pdf(
+    template_path: str | Path,
+    output_path: str | Path,
+    form_data: Dict[str, object],
+    back_template_path: str | Path | None = None,
+) -> str:
     """Fill a fillable CMS-1500 template and write output_path using PyMuPDF."""
     import fitz  # PyMuPDF handles appearance streams correctly
 
     template_path = Path(template_path)
     output_path = Path(output_path)
+    back_template = Path(back_template_path) if back_template_path else None
 
     doc = fitz.open(str(template_path))
     page = doc[0]
@@ -630,6 +636,13 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
                     color=(0, 0, 0),
                     overlay=True,
                 )
+
+    if back_template and back_template.exists():
+        back_doc = fitz.open(str(back_template))
+        try:
+            doc.insert_pdf(back_doc)
+        finally:
+            back_doc.close()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
