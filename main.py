@@ -2113,11 +2113,11 @@ class CMS1500Tab(ttk.Frame):
                     form[k] = v  # always use the structured list
         return form
 
-    def _fill_to_path(self, output_path: Path) -> Path | None:
+    def _fill_to_path(self, output_path: Path, render_mode: str = "full") -> Path | None:
         if not self._ensure_template():
             return None
         try:
-            from cms_pdf import fill_cms1500_pdf
+            from cms_pdf import fill_cms1500_overlay_pdf, fill_cms1500_pdf
         except ImportError:
             messagebox.showerror("Missing Dependency", "Install dependency: pip install pypdf")
             return None
@@ -2125,7 +2125,10 @@ class CMS1500Tab(ttk.Frame):
         data = self._collect_form_data()
         back_template = _resolve_cms_back_template()
         try:
-            fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=back_template)
+            if render_mode == "overlay":
+                fill_cms1500_overlay_pdf(CMS_TEMPLATE_FILE, output_path, data)
+            else:
+                fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=back_template)
             return output_path
         except Exception as ex:
             messagebox.showerror("CMS-1500", f"Could not generate PDF:\n{ex}")
@@ -2423,11 +2426,6 @@ class CMS1500Tab(ttk.Frame):
 
     def _print_form(self):
         print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        back_template = _resolve_cms_back_template()
-        saved = self._fill_to_path(print_path)
-        if not saved:
-            return
-
         try:
             if sys.platform.startswith("win"):
                 paper_mode = messagebox.askyesnocancel(
@@ -2441,6 +2439,10 @@ class CMS1500Tab(ttk.Frame):
                     return
 
                 uses_blank_paper = paper_mode is True
+                render_mode = "full" if uses_blank_paper else "overlay"
+                saved = self._fill_to_path(print_path, render_mode=render_mode)
+                if not saved:
+                    return
 
                 if uses_blank_paper:
                     printer_name = _get_default_printer_name()
@@ -2481,7 +2483,7 @@ class CMS1500Tab(ttk.Frame):
                             )
 
                 os.startfile(str(saved), "print")
-                if uses_blank_paper and back_template:
+                if uses_blank_paper and _resolve_cms_back_template():
                     messagebox.showinfo(
                         "Print",
                         "CMS-1500 sent to the default printer as a 2-page front/back PDF.",
@@ -2489,6 +2491,9 @@ class CMS1500Tab(ttk.Frame):
                 else:
                     messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
             else:
+                saved = self._fill_to_path(print_path, render_mode="full")
+                if not saved:
+                    return
                 webbrowser.open(saved.resolve().as_uri())
                 messagebox.showinfo("Print", f"Opened PDF for printing:\n{saved}")
         except OSError as ex:

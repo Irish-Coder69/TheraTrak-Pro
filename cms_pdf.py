@@ -649,3 +649,65 @@ def fill_cms1500_pdf(
     doc.close()
 
     return str(output_path)
+
+
+def fill_cms1500_overlay_pdf(
+    template_path: str | Path,
+    output_path: str | Path,
+    form_data: Dict[str, object],
+) -> str:
+    """Render populated CMS field values only (no form background) for pre-printed paper."""
+    import fitz
+
+    template_path = Path(template_path)
+    output_path = Path(output_path)
+
+    template_doc = fitz.open(str(template_path))
+    try:
+        template_page = template_doc[0]
+        output_doc = fitz.open()
+        try:
+            page = output_doc.new_page(width=template_page.rect.width, height=template_page.rect.height)
+
+            template_fields = [w.field_name for w in template_page.widgets()]
+            field_values = map_form_data_to_template_fields(form_data, template_fields)
+
+            for widget in template_page.widgets():
+                field_name = widget.field_name or ""
+                norm_widget = _normalize(field_name)
+                val = (field_values.get(field_name) or "").strip()
+                if not val:
+                    continue
+
+                if norm_widget in {"servicefacilitystate", "billingstate"}:
+                    val = _state_abbrev(val)
+                    if not val:
+                        continue
+
+                font_size = 10 if norm_widget.startswith("33billingprovidername") else 11
+
+                # Bottom-left text baseline placement inside each field box.
+                x = widget.rect.x0 + 1.0
+                y = widget.rect.y1 - 1.6
+
+                if field_name.startswith("F CHARGESRow"):
+                    text_w = fitz.get_text_length(val, fontname="helv", fontsize=font_size)
+                    x = max(widget.rect.x0 + 1.0, widget.rect.x1 - text_w - 1.0)
+
+                page.insert_text(
+                    fitz.Point(x, y),
+                    val,
+                    fontsize=font_size,
+                    fontname="helv",
+                    color=(0, 0, 0),
+                    overlay=True,
+                )
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_doc.save(str(output_path))
+        finally:
+            output_doc.close()
+    finally:
+        template_doc.close()
+
+    return str(output_path)
