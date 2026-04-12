@@ -713,3 +713,159 @@ def fill_cms1500_overlay_pdf(
         template_doc.close()
 
     return str(output_path)
+
+
+def _find_widget_by_matchers(widgets: Iterable[object], *, exact: str | None = None,
+                             startswith: str | None = None,
+                             contains: str | None = None) -> object | None:
+    for widget in widgets:
+        norm_widget = _normalize(getattr(widget, "field_name", "") or "")
+        if exact and norm_widget == exact:
+            return widget
+        if startswith and norm_widget.startswith(startswith):
+            return widget
+        if contains and contains in norm_widget:
+            return widget
+    return None
+
+
+def fill_cms1500_overlay_alignment_test_pdf(
+    template_path: str | Path,
+    output_path: str | Path,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
+) -> str:
+    """Render a printable calibration sheet for pre-printed CMS overlay alignment."""
+    import fitz
+
+    template_path = Path(template_path)
+    output_path = Path(output_path)
+
+    template_doc = fitz.open(str(template_path))
+    try:
+        template_page = template_doc[0]
+        widgets = list(template_page.widgets())
+
+        output_doc = fitz.open()
+        try:
+            page = output_doc.new_page(width=template_page.rect.width, height=template_page.rect.height)
+
+            ruler_color = (0.15, 0.15, 0.15)
+            light_color = (0.55, 0.55, 0.55)
+            label_color = (0.75, 0.0, 0.0)
+            width = template_page.rect.width
+            height = template_page.rect.height
+
+            # Top ruler in inches.
+            for inch in range(int(width // 72) + 1):
+                x = inch * 72
+                page.draw_line(fitz.Point(x, 10), fitz.Point(x, 26), color=ruler_color, width=0.7)
+                page.insert_text(
+                    fitz.Point(min(x + 2, width - 30), 34),
+                    str(inch),
+                    fontsize=7,
+                    fontname="helv",
+                    color=ruler_color,
+                    overlay=True,
+                )
+                if inch < int(width // 72):
+                    for half in range(1, 8):
+                        sub_x = x + half * 9
+                        tick_top = 14 if half == 4 else 18
+                        page.draw_line(
+                            fitz.Point(sub_x, tick_top),
+                            fitz.Point(sub_x, 26),
+                            color=light_color,
+                            width=0.4,
+                        )
+
+            # Left ruler in inches.
+            for inch in range(int(height // 72) + 1):
+                y = inch * 72
+                page.draw_line(fitz.Point(10, y), fitz.Point(26, y), color=ruler_color, width=0.7)
+                page.insert_text(
+                    fitz.Point(30, min(y + 8, height - 6)),
+                    str(inch),
+                    fontsize=7,
+                    fontname="helv",
+                    color=ruler_color,
+                    overlay=True,
+                )
+                if inch < int(height // 72):
+                    for half in range(1, 8):
+                        sub_y = y + half * 9
+                        tick_left = 14 if half == 4 else 18
+                        page.draw_line(
+                            fitz.Point(tick_left, sub_y),
+                            fitz.Point(26, sub_y),
+                            color=light_color,
+                            width=0.4,
+                        )
+
+            page.insert_text(
+                fitz.Point(44, 18),
+                "CMS-1500 PRE-PRINTED ALIGNMENT TEST",
+                fontsize=10,
+                fontname="helv",
+                color=ruler_color,
+                overlay=True,
+            )
+            page.insert_text(
+                fitz.Point(44, 30),
+                "Adjust Align Overlay values until the red crosshairs sit correctly inside the matching boxes.",
+                fontsize=7,
+                fontname="helv",
+                color=light_color,
+                overlay=True,
+            )
+
+            anchor_specs = [
+                ("1A", {"contains": "1ainsuredsid"}),
+                ("2", {"startswith": "2patientsname"}),
+                ("3", {"startswith": "3patientsbirthdate"}),
+                ("21A", {"exact": "ai"}),
+                ("24A", {"contains": "dateofservicefrommmddyyrow"}),
+                ("24F", {"contains": "chargesrow"}),
+                ("31", {"startswith": "31providersignature"}),
+                ("33", {"startswith": "33billingprovidername"}),
+            ]
+
+            for label, matcher in anchor_specs:
+                widget = _find_widget_by_matchers(widgets, **matcher)
+                if not widget:
+                    continue
+
+                x = widget.rect.x0 + 1.0 + offset_x
+                y = widget.rect.y1 - 1.6 + offset_y
+                if (widget.field_name or "").startswith("F CHARGESRow"):
+                    x = widget.rect.x1 - 8.0 + offset_x
+
+                page.draw_line(fitz.Point(x - 7, y), fitz.Point(x + 7, y), color=label_color, width=0.7)
+                page.draw_line(fitz.Point(x, y - 7), fitz.Point(x, y + 7), color=label_color, width=0.7)
+                page.draw_circle(fitz.Point(x, y), 1.9, color=label_color, fill=label_color, width=0.7)
+                page.insert_text(
+                    fitz.Point(min(x + 6, width - 24), max(y - 5, 42)),
+                    label,
+                    fontsize=7,
+                    fontname="helv",
+                    color=label_color,
+                    overlay=True,
+                )
+
+            page.insert_text(
+                fitz.Point(44, height - 18),
+                "Reference markers: 1A Insured ID, 2 Patient Name, 3 DOB, 21A DX, 24A DOS, 24F Charge, 31 Signature, 33 Billing.",
+                fontsize=7,
+                fontname="helv",
+                color=light_color,
+                overlay=True,
+            )
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_doc.save(str(output_path))
+        finally:
+            output_doc.close()
+    finally:
+        template_doc.close()
+
+    return str(output_path)

@@ -2445,28 +2445,39 @@ class CMS1500Tab(ttk.Frame):
 
         ttk.Label(
             dlg,
-            text="Tip: print a test page, measure how far the text missed each box,\nand enter that distance here.",
+            text=(
+                "Use Save + Print Test to print a calibration page with rulers and red guide markers.\n"
+                "Adjust the values until those markers land in the correct boxes."
+            ),
             foreground="gray",
             justify="left",
         ).grid(row=3, column=0, columnspan=2, padx=12, pady=(2, 8), sticky="w")
 
-        def _save():
+        def _save(close_dialog=True):
             try:
                 x_val = float(sv_x.get())
                 y_val = float(sv_y.get())
             except ValueError:
                 messagebox.showerror("Alignment", "Please enter valid numbers for both offsets.", parent=dlg)
-                return
+                return False
             if abs(x_val) > 2.0 or abs(y_val) > 2.0:
                 messagebox.showerror(
                     "Alignment",
                     "Offsets larger than 2 inches are unlikely to be correct.\nPlease re-check the values.",
                     parent=dlg,
                 )
-                return
+                return False
             db.save_provider({"cms_overlay_offset_x": x_val, "cms_overlay_offset_y": y_val})
-            messagebox.showinfo("Alignment", "Overlay alignment saved.", parent=dlg)
+            if close_dialog:
+                messagebox.showinfo("Alignment", "Overlay alignment saved.", parent=dlg)
+                dlg.destroy()
+            return True
+
+        def _save_and_print_test():
+            if not _save(close_dialog=False):
+                return
             dlg.destroy()
+            self._print_overlay_alignment_test()
 
         def _reset():
             sv_x.set("0")
@@ -2475,6 +2486,7 @@ class CMS1500Tab(ttk.Frame):
         btn_row = ttk.Frame(dlg)
         btn_row.grid(row=4, column=0, columnspan=2, pady=(0, 12))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="left", padx=6)
+        ttk.Button(btn_row, text="Save + Print Test", command=_save_and_print_test).pack(side="left", padx=6)
         ttk.Button(btn_row, text="Reset to 0", command=_reset).pack(side="left", padx=6)
         ttk.Button(btn_row, text="Cancel", command=dlg.destroy).pack(side="left", padx=6)
 
@@ -2495,6 +2507,50 @@ class CMS1500Tab(ttk.Frame):
         if not saved:
             return
         webbrowser.open(saved.resolve().as_uri())
+
+    def _print_overlay_alignment_test(self):
+        if not self._ensure_template():
+            return
+        try:
+            from cms_pdf import fill_cms1500_overlay_alignment_test_pdf
+        except ImportError:
+            messagebox.showerror("Missing Dependency", "Install dependency: pip install pypdf")
+            return
+
+        provider = db.get_provider()
+        offset_x = float(provider.get("cms_overlay_offset_x") or 0.0)
+        offset_y = float(provider.get("cms_overlay_offset_y") or 0.0)
+        test_path = APP_ROOT / "temp" / f"CMS1500_overlay_alignment_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        try:
+            fill_cms1500_overlay_alignment_test_pdf(
+                CMS_TEMPLATE_FILE,
+                test_path,
+                offset_x=offset_x * 72.0,
+                offset_y=offset_y * 72.0,
+            )
+        except Exception as ex:
+            messagebox.showerror("Alignment Test", f"Could not generate alignment test PDF:\n{ex}")
+            return
+
+        if sys.platform.startswith("win"):
+            ready = messagebox.askokcancel(
+                "Print Alignment Test",
+                "Load a pre-printed CMS-1500 form into the printer, then click OK to print the alignment test page.",
+            )
+            if not ready:
+                return
+            try:
+                os.startfile(str(test_path), "print")
+                messagebox.showinfo(
+                    "Alignment Test",
+                    "Alignment test page sent to the default printer.\nUse the rulers and red reference markers to adjust Align Overlay values.",
+                )
+            except OSError as ex:
+                messagebox.showerror("Alignment Test", f"Could not print alignment test PDF:\n{ex}")
+        else:
+            webbrowser.open(test_path.resolve().as_uri())
+            messagebox.showinfo("Alignment Test", f"Opened alignment test PDF:\n{test_path}")
 
     def _print_form(self):
         print_path = APP_ROOT / "temp" / f"CMS1500_print_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
