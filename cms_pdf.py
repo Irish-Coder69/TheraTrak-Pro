@@ -537,6 +537,13 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     doc = fitz.open(str(template_path))
     page = doc[0]
 
+    # The source template can carry a thin dark edge on the far-left boundary.
+    # Mask it once so preview/export/print output stays clean.
+    left_edge_mask = page.new_shape()
+    left_edge_mask.draw_rect(fitz.Rect(page.rect.x0, page.rect.y0, page.rect.x0 + 2.3, page.rect.y1))
+    left_edge_mask.finish(fill=(1, 1, 1), color=None, width=0)
+    left_edge_mask.commit()
+
     # Collect all field names from the template widgets.
     template_fields = [w.field_name for w in page.widgets()]
     field_values = map_form_data_to_template_fields(form_data, template_fields)
