@@ -534,11 +534,23 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
     # Collect all field names from the template widgets.
     template_fields = [w.field_name for w in page.widgets()]
     field_values = map_form_data_to_template_fields(form_data, template_fields)
+    billing_name_overlays: list[tuple[object, str]] = []
 
     # Update each widget value and enforce 11pt field text for consistent print output.
     for widget in page.widgets():
+        norm_widget = _normalize(widget.field_name or "")
         val = field_values.get(widget.field_name, "")
         needs_update = False
+
+        # Box 33 provider name can clip in the widget appearance stream.
+        # Keep the field value blank and render text manually bottom-aligned.
+        if norm_widget.startswith("33billingprovidername"):
+            if val:
+                billing_name_overlays.append((widget.rect, val))
+            if widget.field_value:
+                widget.field_value = ""
+                widget.update()
+            continue
 
         # Ensure all line-item charges (24F) render right-aligned.
         if (widget.field_name or "").startswith("F CHARGESRow"):
@@ -576,6 +588,29 @@ def fill_cms1500_pdf(template_path: str | Path, output_path: str | Path, form_da
 
         if needs_update:
             widget.update()
+
+    for rect, value in billing_name_overlays:
+        fontsize = 9
+        text_box = fitz.Rect(rect.x0 + 1.5, max(rect.y0 + 0.5, rect.y1 - fontsize - 2.0), rect.x1 - 1.0, rect.y1 - 0.6)
+        remaining = page.insert_textbox(
+            text_box,
+            value,
+            fontsize=fontsize,
+            fontname="helv",
+            align=fitz.TEXT_ALIGN_LEFT,
+            color=(0, 0, 0),
+            overlay=True,
+        )
+        if remaining < 0:
+            page.insert_textbox(
+                text_box,
+                value,
+                fontsize=8,
+                fontname="helv",
+                align=fitz.TEXT_ALIGN_LEFT,
+                color=(0, 0, 0),
+                overlay=True,
+            )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
