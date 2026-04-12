@@ -2127,6 +2127,8 @@ class CMS1500Tab(ttk.Frame):
         try:
             if render_mode == "overlay":
                 fill_cms1500_overlay_pdf(CMS_TEMPLATE_FILE, output_path, data)
+            elif render_mode == "front_only":
+                fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=None)
             else:
                 fill_cms1500_pdf(CMS_TEMPLATE_FILE, output_path, data, back_template_path=back_template)
             return output_path
@@ -2482,13 +2484,34 @@ class CMS1500Tab(ttk.Frame):
                                 f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
                             )
 
-                os.startfile(str(saved), "print")
-                if uses_blank_paper and _resolve_cms_back_template():
-                    messagebox.showinfo(
-                        "Print",
-                        "CMS-1500 sent to the default printer as a 2-page front/back PDF.",
-                    )
+                    # Print front side only (page 1 of 2) as a separate job.
+                    front_path = print_path.with_stem(print_path.stem + "_front")
+                    saved_front = self._fill_to_path(front_path, render_mode="front_only")
+                    if not saved_front:
+                        return
+                    os.startfile(str(saved_front), "print")
+
+                    back_template = _resolve_cms_back_template()
+                    if back_template:
+                        flip_ok = messagebox.askokcancel(
+                            "Flip Paper for Back Side",
+                            "Side 1 (front) has been sent to the printer.\n\n"
+                            "When it finishes printing:\n"
+                            "  1. Remove the sheet from the output tray\n"
+                            "  2. Flip it over and reload it into the paper tray\n"
+                            "     (printed side down, same orientation)\n\n"
+                            "Click OK when the paper is loaded to print side 2,\n"
+                            "or Cancel to skip the back side.",
+                        )
+                        if flip_ok:
+                            os.startfile(str(back_template), "print")
+                            messagebox.showinfo("Print", "Side 2 (back) sent to printer.\nPrinting complete.")
+                        else:
+                            messagebox.showinfo("Print", "Back side skipped. Front side only was printed.")
+                    else:
+                        messagebox.showinfo("Print", "CMS-1500 front sent to printer.\n(No back template found.)")
                 else:
+                    os.startfile(str(saved), "print")
                     messagebox.showinfo("Print", "CMS-1500 sent to default printer.")
             else:
                 saved = self._fill_to_path(print_path, render_mode="full")
