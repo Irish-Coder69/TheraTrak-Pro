@@ -35,6 +35,12 @@ def _sex_marker(value: str) -> str:
     return ""
 
 
+def _state_abbrev(value: str) -> str:
+    """Normalize state input to a 2-letter uppercase abbreviation."""
+    letters_only = "".join(ch for ch in (value or "").upper() if ch.isalpha())
+    return letters_only[:2]
+
+
 def _row_number(norm_field: str) -> int | None:
     """Return 1-based service row number encoded in a normalised field name, or None."""
     # Row! is Row1 (typo in real template PDF)
@@ -474,7 +480,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field == "servicefacilitycity":
             value = get("facility_city")
         elif norm_field == "servicefacilitystate":
-            value = get("facility_state")
+            value = _state_abbrev(get("facility_state"))
         elif norm_field == "servicefacilityzipcode":
             value = get("facility_zip")
         elif norm_field in {"anpi1", "servicefacilitynpi", "32aservicefacilitynpi"}:
@@ -488,7 +494,7 @@ def map_form_data_to_template_fields(form_data: Dict[str, object], template_fiel
         elif norm_field == "billingcity":
             value = get("billing_city")
         elif norm_field == "billingstate":
-            value = get("billing_state")
+            value = _state_abbrev(get("billing_state"))
         elif norm_field == "billingzipcode":
             value = get("billing_zip")
         elif norm_field.startswith("billingphonenumber"):
