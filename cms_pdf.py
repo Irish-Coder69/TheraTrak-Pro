@@ -651,6 +651,43 @@ def fill_cms1500_pdf(
     return str(output_path)
 
 
+def render_shifted_pdf(
+    input_path: str | Path,
+    output_path: str | Path,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
+) -> str:
+    """Copy a PDF while shifting rendered content to compensate for printer margins."""
+    import fitz
+
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    src_doc = fitz.open(str(input_path))
+    try:
+        out_doc = fitz.open()
+        try:
+            for pno in range(src_doc.page_count):
+                src_page = src_doc[pno]
+                new_page = out_doc.new_page(width=src_page.rect.width, height=src_page.rect.height)
+                target_rect = fitz.Rect(
+                    offset_x,
+                    offset_y,
+                    src_page.rect.width + offset_x,
+                    src_page.rect.height + offset_y,
+                )
+                new_page.show_pdf_page(target_rect, src_doc, pno)
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            out_doc.save(str(output_path))
+        finally:
+            out_doc.close()
+    finally:
+        src_doc.close()
+
+    return str(output_path)
+
+
 def fill_cms1500_overlay_pdf(
     template_path: str | Path,
     output_path: str | Path,

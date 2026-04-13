@@ -2418,6 +2418,8 @@ class CMS1500Tab(ttk.Frame):
         provider = db.get_provider()
         cur_x = float(provider.get("cms_overlay_offset_x") or 0.0)
         cur_y = float(provider.get("cms_overlay_offset_y") or 0.0)
+        cur_blank_x = float(provider.get("cms_blank_offset_x") or 0.0)
+        cur_blank_y = float(provider.get("cms_blank_offset_y") or 0.0)
 
         dlg = tk.Toplevel(self)
         apply_window_icon(dlg)
@@ -2443,31 +2445,53 @@ class CMS1500Tab(ttk.Frame):
         sv_y = tk.StringVar(value=f"{cur_y:.3f}".rstrip("0").rstrip(".") or "0")
         ttk.Entry(dlg, textvariable=sv_y, width=10).grid(row=2, column=1, padx=12, pady=4, sticky="w")
 
+        ttk.Separator(dlg, orient="horizontal").grid(row=3, column=0, columnspan=2, sticky="ew", padx=12, pady=(8, 6))
+
+        ttk.Label(dlg, text="Blank Paper Full-Form Shift", font=("Arial", 10, "bold")).grid(
+            row=4, column=0, columnspan=2, padx=12, pady=(0, 4), sticky="w"
+        )
+
+        ttk.Label(dlg, text="Horizontal shift (inches):").grid(row=5, column=0, padx=12, pady=4, sticky="w")
+        sv_blank_x = tk.StringVar(value=f"{cur_blank_x:.3f}".rstrip("0").rstrip(".") or "0")
+        ttk.Entry(dlg, textvariable=sv_blank_x, width=10).grid(row=5, column=1, padx=12, pady=4, sticky="w")
+
+        ttk.Label(dlg, text="Vertical shift (inches):").grid(row=6, column=0, padx=12, pady=4, sticky="w")
+        sv_blank_y = tk.StringVar(value=f"{cur_blank_y:.3f}".rstrip("0").rstrip(".") or "0")
+        ttk.Entry(dlg, textvariable=sv_blank_y, width=10).grid(row=6, column=1, padx=12, pady=4, sticky="w")
+
         ttk.Label(
             dlg,
             text=(
                 "Use Save + Print Test to print a calibration page with rulers and red guide markers.\n"
-                "Adjust the values until those markers land in the correct boxes."
+                "Adjust overlay values until markers land in the correct boxes.\n"
+                "Blank-paper values shift the full form (front/back) to compensate printer margins."
             ),
             foreground="gray",
             justify="left",
-        ).grid(row=3, column=0, columnspan=2, padx=12, pady=(2, 8), sticky="w")
+        ).grid(row=7, column=0, columnspan=2, padx=12, pady=(2, 8), sticky="w")
 
         def _save(close_dialog=True):
             try:
                 x_val = float(sv_x.get())
                 y_val = float(sv_y.get())
+                blank_x_val = float(sv_blank_x.get())
+                blank_y_val = float(sv_blank_y.get())
             except ValueError:
-                messagebox.showerror("Alignment", "Please enter valid numbers for both offsets.", parent=dlg)
+                messagebox.showerror("Alignment", "Please enter valid numbers for all offset values.", parent=dlg)
                 return False
-            if abs(x_val) > 2.0 or abs(y_val) > 2.0:
+            if abs(x_val) > 2.0 or abs(y_val) > 2.0 or abs(blank_x_val) > 2.0 or abs(blank_y_val) > 2.0:
                 messagebox.showerror(
                     "Alignment",
                     "Offsets larger than 2 inches are unlikely to be correct.\nPlease re-check the values.",
                     parent=dlg,
                 )
                 return False
-            db.save_provider({"cms_overlay_offset_x": x_val, "cms_overlay_offset_y": y_val})
+            db.save_provider({
+                "cms_overlay_offset_x": x_val,
+                "cms_overlay_offset_y": y_val,
+                "cms_blank_offset_x": blank_x_val,
+                "cms_blank_offset_y": blank_y_val,
+            })
             if close_dialog:
                 messagebox.showinfo("Alignment", "Overlay alignment saved.", parent=dlg)
                 dlg.destroy()
@@ -2482,9 +2506,11 @@ class CMS1500Tab(ttk.Frame):
         def _reset():
             sv_x.set("0")
             sv_y.set("0")
+            sv_blank_x.set("0")
+            sv_blank_y.set("0")
 
         btn_row = ttk.Frame(dlg)
-        btn_row.grid(row=4, column=0, columnspan=2, pady=(0, 12))
+        btn_row.grid(row=8, column=0, columnspan=2, pady=(0, 12))
         ttk.Button(btn_row, text="Save", command=_save).pack(side="left", padx=6)
         ttk.Button(btn_row, text="Save + Print Test", command=_save_and_print_test).pack(side="left", padx=6)
         ttk.Button(btn_row, text="Reset to 0", command=_reset).pack(side="left", padx=6)
@@ -2567,10 +2593,11 @@ class CMS1500Tab(ttk.Frame):
                     return
 
                 uses_blank_paper = paper_mode is True
-                render_mode = "full" if uses_blank_paper else "overlay"
-                saved = self._fill_to_path(print_path, render_mode=render_mode)
-                if not saved:
-                    return
+                saved = None
+                if not uses_blank_paper:
+                    saved = self._fill_to_path(print_path, render_mode="overlay")
+                    if not saved:
+                        return
 
                 if uses_blank_paper:
                     printer_name = _get_default_printer_name()
@@ -2610,12 +2637,31 @@ class CMS1500Tab(ttk.Frame):
                                 f"Could not open printing preferences for:\n{printer_name}\n\nPrinting will continue with the printer's current settings.",
                             )
 
+                    provider = db.get_provider()
+                    blank_offset_x_pts = float(provider.get("cms_blank_offset_x") or 0.0) * 72.0
+                    blank_offset_y_pts = float(provider.get("cms_blank_offset_y") or 0.0) * 72.0
+
                     # Print front side only (page 1 of 2) as a separate job.
                     front_path = print_path.with_stem(print_path.stem + "_front")
                     saved_front = self._fill_to_path(front_path, render_mode="front_only")
                     if not saved_front:
                         return
-                    os.startfile(str(saved_front), "print")
+                    front_to_print = saved_front
+                    if abs(blank_offset_x_pts) > 0.01 or abs(blank_offset_y_pts) > 0.01:
+                        try:
+                            from cms_pdf import render_shifted_pdf
+                            shifted_front = print_path.with_stem(print_path.stem + "_front_shifted")
+                            render_shifted_pdf(saved_front, shifted_front,
+                                               offset_x=blank_offset_x_pts,
+                                               offset_y=blank_offset_y_pts)
+                            front_to_print = shifted_front
+                        except Exception as ex:
+                            messagebox.showwarning(
+                                "Print Alignment",
+                                f"Could not apply blank-paper offset to front page:\n{ex}\n\n"
+                                "Printing will continue without blank-paper offset.",
+                            )
+                    os.startfile(str(front_to_print), "print")
 
                     back_template = _resolve_cms_back_template()
                     if back_template:
@@ -2630,7 +2676,22 @@ class CMS1500Tab(ttk.Frame):
                             "or Cancel to skip the back side.",
                         )
                         if flip_ok:
-                            os.startfile(str(back_template), "print")
+                            back_to_print = back_template
+                            if abs(blank_offset_x_pts) > 0.01 or abs(blank_offset_y_pts) > 0.01:
+                                try:
+                                    from cms_pdf import render_shifted_pdf
+                                    shifted_back = print_path.with_stem(print_path.stem + "_back_shifted")
+                                    render_shifted_pdf(back_template, shifted_back,
+                                                       offset_x=blank_offset_x_pts,
+                                                       offset_y=blank_offset_y_pts)
+                                    back_to_print = shifted_back
+                                except Exception as ex:
+                                    messagebox.showwarning(
+                                        "Print Alignment",
+                                        f"Could not apply blank-paper offset to back page:\n{ex}\n\n"
+                                        "Printing will continue without blank-paper offset.",
+                                    )
+                            os.startfile(str(back_to_print), "print")
                             messagebox.showinfo("Print", "Side 2 (back) sent to printer.\nPrinting complete.")
                         else:
                             messagebox.showinfo("Print", "Back side skipped. Front side only was printed.")
