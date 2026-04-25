@@ -3716,6 +3716,343 @@ class BookkeepingTab(ttk.Frame):
                     [f"{float(r[k] or 0):.2f}" for k, _ in _BK_EXP_COLS]
                 )
         messagebox.showinfo("Exported", f"Saved to:\n{path}", parent=self)
+
+
+class VersionManagerDialog(tk.Toplevel):
+    def __init__(self, parent, on_change=None):
+        super().__init__(parent)
+        self.on_change = on_change
+        self.title("Version Manager")
+        self.geometry("420x280")
+        self.resizable(False, False)
+        self._build()
+        self._refresh()
+        self.grab_set()
+
+    def _build(self):
+        main = ttk.Frame(self, padding=12)
+        main.pack(fill="both", expand=True)
+
+        ttk.Label(main, text="Current Version", font=FONT_LG).pack(anchor="w")
+        self.lbl_ver = ttk.Label(main, text="", font=("Calibri", 14, "bold"), foreground=ACCENT)
+        self.lbl_ver.pack(anchor="w", pady=(2, 10))
+
+        btn_frame = ttk.Frame(main)
+        btn_frame.pack(fill="x", pady=4)
+        btn(btn_frame, "+ Build", self._bump_build, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Patch", self._bump_patch, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Minor", self._bump_minor, "Accent.TButton").pack(side="left", padx=3)
+        btn(btn_frame, "+ Major", self._bump_major, "Accent.TButton").pack(side="left", padx=3)
+
+        set_frame = lframe(main, "Set Exact Version")
+        set_frame.pack(fill="x", pady=8)
+
+        self.var_major = tk.StringVar()
+        self.var_minor = tk.StringVar()
+        self.var_patch = tk.StringVar()
+        self.var_build = tk.StringVar()
+
+        ttk.Label(set_frame, text="Major").grid(row=0, column=0, padx=4, pady=3)
+        ttk.Entry(set_frame, textvariable=self.var_major, width=6).grid(row=0, column=1, padx=4)
+        ttk.Label(set_frame, text="Minor").grid(row=0, column=2, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_minor, width=6).grid(row=0, column=3, padx=4)
+        ttk.Label(set_frame, text="Patch").grid(row=0, column=4, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_patch, width=6).grid(row=0, column=5, padx=4)
+        ttk.Label(set_frame, text="Build").grid(row=0, column=6, padx=4)
+        ttk.Entry(set_frame, textvariable=self.var_build, width=6).grid(row=0, column=7, padx=4)
+
+        btn(set_frame, "Apply Version", self._set_version).grid(row=1, column=0, columnspan=8, pady=6)
+
+        self.lbl_status = ttk.Label(main, text="", foreground=MUTED)
+        self.lbl_status.pack(anchor="w", pady=(4, 0))
+
+        bottom = ttk.Frame(main)
+        bottom.pack(fill="x", side="bottom", pady=(10, 0))
+        btn(bottom, "Close", self.destroy).pack(side="right")
+
+    def _refresh(self):
+        data = vm.get_version_data()
+        self.lbl_ver.config(text=vm.get_version_string())
+        self.var_major.set(str(data["major"]))
+        self.var_minor.set(str(data["minor"]))
+        self.var_patch.set(str(data["patch"]))
+        self.var_build.set(str(data["build"]))
+
+    def _notify_change(self):
+        self._refresh()
+        if self.on_change:
+            self.on_change(vm.get_version_string())
+
+    def _bump_build(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_build()}")
+        self._notify_change()
+
+    def _bump_patch(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_patch()}")
+        self._notify_change()
+
+    def _bump_minor(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_minor()}")
+        self._notify_change()
+
+    def _bump_major(self):
+        self.lbl_status.config(text=f"Updated: {vm.bump_major()}")
+        self._notify_change()
+
+    def _set_version(self):
+        try:
+            major = int(self.var_major.get().strip())
+            minor = int(self.var_minor.get().strip())
+            patch = int(self.var_patch.get().strip())
+            build = int(self.var_build.get().strip())
+        except ValueError:
+            messagebox.showerror("Invalid", "Version numbers must be integers.", parent=self)
+            return
+        version_text = vm.set_version(major, minor, patch, build)
+        self.lbl_status.config(text=f"Updated: {version_text}")
+        self._notify_change()
+
+
+class TheraTrakApp(tk.Tk):
+    def __init__(self, current_user=None):
+        super().__init__()
+        apply_window_icon(self)
+        self.current_user = current_user
+        self._version = vm.get_version_string()
+        self.title(f"TheraTrak Pro - {self._version}")
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(1280, screen_w - 40)
+        win_h = min(820, screen_h - 60)
+        self.geometry(f"{win_w}x{win_h}+{(screen_w-win_w)//2}+{(screen_h-win_h)//2}")
+        self.minsize(900, 600)
+
+        self._style = ttk_style()
+
+        db.initialize_db()
+
+        self._build_header()
+        self._build_notebook()
+        self._build_statusbar()
+        self._build_menu()
+        self._update_stats()
+
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _build_header(self):
+        hdr = tk.Frame(self, bg=HDR_BG, height=56)
+        hdr.pack(fill="x", side="top")
+        hdr.pack_propagate(False)
+
+        tk.Label(hdr, text="TheraTrak Pro", bg=HDR_BG, fg=HDR_FG,
+                 font=("Calibri", 20, "bold")).pack(side="left", padx=16, pady=10)
+        tk.Label(hdr, text="Combined Therapy & Billing", bg=HDR_BG, fg="#93c5fd",
+                 font=("Calibri", 10)).pack(side="left", padx=2)
+        self._lbl_version = tk.Label(hdr, text=self._version, bg=HDR_BG, fg="#bfdbfe",
+                                     font=("Calibri", 9, "bold"))
+        self._lbl_version.pack(side="left", padx=10)
+
+        stats = tk.Frame(hdr, bg=HDR_BG)
+        stats.pack(side="right", padx=14)
+        self._lbl_date = tk.Label(stats, text="", bg=HDR_BG, fg="#93c5fd", font=FONT_SM)
+        self._lbl_pts = tk.Label(stats, text="", bg=HDR_BG, fg="#93c5fd", font=FONT_SM)
+        self._lbl_user = tk.Label(stats, text="", bg=HDR_BG, fg="#bfdbfe", font=FONT_SM)
+        self._lbl_date.pack(side="bottom", anchor="e")
+        self._lbl_pts.pack(side="bottom", anchor="e")
+        self._lbl_user.pack(side="bottom", anchor="e")
+
+    def _build_notebook(self):
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True)
+
+        self.tab_patients = PatientsTab(self.nb)
+        self.tab_sessions = SessionNotesTab(self.nb)
+        self.tab_billing = BillingTab(self.nb)
+        self.tab_cms = CMS1500Tab(self.nb)
+        self.tab_bookkeeping = BookkeepingTab(self.nb)
+        self.tab_reports = ReportsTab(self.nb)
+        self.tab_settings = SettingsTab(self.nb)
+
+        self.nb.add(self.tab_patients, text="  Patients  ")
+        self.nb.add(self.tab_sessions, text="  Session Notes  ")
+        self.nb.add(self.tab_billing, text="  Billing  ")
+        self.nb.add(self.tab_cms, text="  CMS-1500  ")
+        self.nb.add(self.tab_bookkeeping, text="  Bookkeeping  ")
+        self.nb.add(self.tab_reports, text="  Reports  ")
+        self.nb.add(self.tab_settings, text="  Settings / Import  ")
+
+    def _build_statusbar(self):
+        sb = tk.Frame(self, bg="#e2e8f0", height=24)
+        sb.pack(fill="x", side="bottom")
+        sb.pack_propagate(False)
+        self._status_lbl = tk.Label(sb, text="Ready", bg="#e2e8f0", fg=MUTED, font=FONT_SM)
+        self._status_lbl.pack(side="left", padx=8)
+        db_path = str(db.DB_PATH)
+        tk.Label(sb, text=f"Database: {db_path}", bg="#e2e8f0", fg=MUTED, font=FONT_SM).pack(side="right", padx=8)
+
+    def _build_menu(self):
+        menubar = tk.Menu(self)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="New Patient", command=lambda: PatientDialog(self, on_save=lambda _: self.tab_patients.refresh()))
+        file_menu.add_command(label="New Session", command=lambda: SessionDialog(self, on_save=lambda _: self.tab_sessions.refresh()))
+        file_menu.add_separator()
+        file_menu.add_command(label="User Directory", command=self._open_user_directory)
+        file_menu.add_command(label="Provider Profile", command=self._open_provider_profile)
+        file_menu.add_separator()
+        file_menu.add_command(label="Backup Database", command=self._backup_db)
+        file_menu.add_separator()
+        file_menu.add_command(label="Logout", command=self._logout)
+        file_menu.add_command(label="Exit", command=self._on_close)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        nav_menu = tk.Menu(menubar, tearoff=0)
+        nav_menu.add_command(label="Patients", command=lambda: self.nb.select(0))
+        nav_menu.add_command(label="Session Notes", command=lambda: self.nb.select(1))
+        nav_menu.add_command(label="Billing", command=lambda: self.nb.select(2))
+        nav_menu.add_command(label="CMS-1500", command=lambda: self.nb.select(3))
+        nav_menu.add_command(label="Bookkeeping", command=lambda: self.nb.select(4))
+        nav_menu.add_command(label="Reports", command=lambda: self.nb.select(5))
+        nav_menu.add_command(label="Settings/Import", command=lambda: self.nb.select(6))
+        nav_menu.add_command(label="Provider Profile", command=self._open_provider_profile)
+        menubar.add_cascade(label="Navigate", menu=nav_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Check for Updates", command=self._check_for_updates)
+        help_menu.add_command(label="User Guide", command=self._open_user_guide)
+        help_menu.add_command(label="About TheraTrak Pro", command=self._about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.config(menu=menubar)
+
+    def _update_stats(self):
+        self._version = vm.get_version_string()
+        self.title(f"TheraTrak Pro - {self._version}")
+        self._lbl_version.config(text=self._version)
+        n = db.count_patients("Active")
+        self._lbl_pts.config(text=f"Active Patients: {n}")
+        self._lbl_date.config(text=date.today().strftime("%A, %B %d, %Y"))
+        if self.current_user:
+            who = f"{self.current_user['first_name']} {self.current_user['last_name']} ({self.current_user['username']})"
+            self._lbl_user.config(text=f"Logged In: {who}")
+        else:
+            self._lbl_user.config(text="Logged In: -")
+
+    def set_logged_in_user(self, user):
+        self.current_user = user
+        self._update_stats()
+
+    def _open_user_directory(self):
+        UserDirectoryDialog(self)
+
+    def _open_provider_profile(self):
+        self.nb.select(6)
+        if hasattr(self, "tab_settings"):
+            self.tab_settings.show_provider_profile()
+
+    def _logout(self):
+        if not messagebox.askyesno("Logout", "Are you sure you want to log out?", parent=self):
+            return
+        self.current_user = None
+        self._update_stats()
+        self.withdraw()
+        login = LoginDialog(self)
+        self.wait_window(login)
+        if login.user:
+            self.set_logged_in_user(login.user)
+            self.deiconify()
+        else:
+            self.destroy()
+
+    def _backup_db(self):
+        from shutil import copy2
+        dest = filedialog.asksaveasfilename(
+            defaultextension=".db",
+            filetypes=[("Database", "*.db"), ("All", "*.*")],
+            initialfile=f"theratrak_backup_{date.today().strftime('%Y%m%d')}.db")
+        if dest:
+            copy2(db.DB_PATH, dest)
+            messagebox.showinfo("Backup", f"Database backed up to:\n{dest}")
+
+    def _open_user_guide(self):
+        guide_candidates = [
+            APP_ROOT / "USER_GUIDE.md",
+            ASSETS_DIR / "USER_GUIDE.md",
+        ]
+        guide_path = next((p for p in guide_candidates if p.exists()), None)
+        if not guide_path:
+            looked_in = "\n".join(str(p) for p in guide_candidates)
+            messagebox.showerror("User Guide", f"User guide file not found.\n\nLooked in:\n{looked_in}")
+            return
+        try:
+            content = guide_path.read_text(encoding="utf-8")
+        except OSError as ex:
+            messagebox.showerror("User Guide", f"Could not read user guide:\n{ex}")
+            return
+
+        win = tk.Toplevel(self)
+        apply_window_icon(win)
+        win.title("TheraTrak Pro User Guide")
+        win.geometry("980x760")
+        win.minsize(760, 560)
+
+        frm = ttk.Frame(win, padding=10)
+        frm.pack(fill="both", expand=True)
+        txt = tk.Text(frm, wrap="word", font=FONT_UI, relief="solid", borderwidth=1)
+        sb = ttk.Scrollbar(frm, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        txt.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        txt.insert("1.0", content)
+        txt.configure(state="disabled")
+
+    def _about(self):
+        user_line = ""
+        if self.current_user:
+            user_line = f"Logged In User: {self.current_user['username']} ({self.current_user['role']})\n"
+        messagebox.showinfo(
+            "About TheraTrak Pro",
+            "TheraTrak Pro\n"
+            f"Version: {self._version}\n"
+            f"{user_line}"
+            "Combined Therapy Practice Management + CMS-1500\n\n"
+            "Features:\n"
+            "  - Patient management & demographics\n"
+            "  - Session notes with DSM-5 / ICD-10 lookup\n"
+            "  - Billing ledger & payment tracking\n"
+            "  - CMS-1500 fillable PDF (preview + print)\n"
+            "  - Reports & CSV data export\n"
+            "  - Data migration from Notes 444 files\n\n"
+            f"Database: {db.DB_PATH}\n\n"
+            "Created By: Judson M. Fitzpatrick, Irish_Codeers Programming\n"
+            f"(c) {datetime.now().year} Irish_Codeers Programming. All rights reserved."
+        )
+
+    def _parse_version_tuple(self, text):
+        nums = [int(n) for n in re.findall(r"\d+", text or "")]
+        if not nums:
+            return (0, 0, 0, 0)
+        while len(nums) < 4:
+            nums.append(0)
+        return tuple(nums[:4])
+
+    def _format_tag_version(self, tag: str) -> str:
+        nums = [int(n) for n in re.findall(r"\d+", tag or "")]
+        while len(nums) < 4:
+            nums.append(0)
+        major, minor, patch, build = nums[:4]
+        return f"{major}.{minor}.{patch} Build {build}"
+
+    def _pick_installer_asset(self, payload):
+        assets = payload.get("assets") or []
+        for asset in assets:
+            name = (asset.get("name") or "").lower()
+            if name.endswith(".exe") and "installer" in name:
+                return asset
+        for asset in assets:
+            name = (asset.get("name") or "").lower()
+            if name.endswith(".exe"):
+                return asset
         return None
 
     def _backup_database_for_update(self):
