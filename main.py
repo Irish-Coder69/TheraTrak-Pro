@@ -3795,34 +3795,99 @@ class BookkeepingTab(ttk.Frame):
         opening = db.get_bookkeeping_opening_balance(year)
         closing = opening + net
 
-        lines = [f"Annual Summary - {year}", "=" * 40, ""]
-        lines.append("INCOME")
-        for key, lbl in _BK_INC_COLS:
-            lines.append(f"  {lbl:<22} ${s.get(key, 0):>10,.2f}")
-        lines.append(f"  {'TOTAL INCOME':<22} ${total_in:>10,.2f}")
-        lines.append("")
-        lines.append("EXPENSES")
-        for key, lbl in _BK_EXP_COLS:
-            lines.append(f"  {lbl:<22} ${s.get(key, 0):>10,.2f}")
-        lines.append(f"  {'TOTAL EXPENSES':<22} ${total_out:>10,.2f}")
-        lines.append("")
-        lines.append("=" * 40)
-        sign = "+" if net >= 0 else ""
-        lines.append(f"  {'Net Income':<22} {sign}${net:>10,.2f}")
-        lines.append(f"  {'Opening Balance':<22} ${opening:>10,.2f}")
-        lines.append(f"  {'Closing Balance':<22} ${closing:>10,.2f}")
+        def _fmt_money(v):
+            return f"${float(v or 0):,.2f}"
 
         dlg = tk.Toplevel(self)
         apply_window_icon(dlg)
         dlg.title(f"Annual Summary - {year}")
-        dlg.resizable(False, False)
+        dlg.resizable(True, True)
         dlg.transient(self)
         dlg.grab_set()
-        txt = tk.Text(dlg, font=FONT_MONO, width=50, height=len(lines) + 2, padx=12, pady=8)
-        txt.pack(fill="both", expand=True, padx=8, pady=8)
-        txt.insert("1.0", "`n".join(lines))
-        txt.config(state="disabled")
-        btn(dlg, "Close", dlg.destroy).pack(side="right", padx=8, pady=6)
+        dlg.geometry("980x620")
+        dlg.minsize(840, 520)
+
+        root = ttk.Frame(dlg, padding=10)
+        root.pack(fill="both", expand=True)
+        root.rowconfigure(1, weight=1)
+        root.columnconfigure(0, weight=1)
+
+        hdr = ttk.Frame(root)
+        hdr.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        hdr.columnconfigure(0, weight=1)
+        ttk.Label(hdr, text=f"Annual Summary - {year}", font=FONT_LG).grid(row=0, column=0, sticky="w")
+
+        totals = ttk.Frame(root)
+        totals.grid(row=1, column=0, sticky="new", pady=(0, 8))
+        for i in range(5):
+            totals.columnconfigure(i, weight=1)
+
+        total_cards = [
+            ("Opening", _fmt_money(opening), "#475569"),
+            ("Income", _fmt_money(total_in), "#166534"),
+            ("Expenses", _fmt_money(total_out), "#991b1b"),
+            ("Net", f"{'+' if net >= 0 else ''}{_fmt_money(net)}", "#1e40af" if net >= 0 else "#b91c1c"),
+            ("Closing", _fmt_money(closing), "#334155"),
+        ]
+        for i, (label, value, color) in enumerate(total_cards):
+            card = tk.Frame(totals, bg="#f8fafc", bd=1, relief="solid")
+            card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0))
+            tk.Label(card, text=label, bg="#f8fafc", fg="#64748b", font=FONT_SM).pack(anchor="w", padx=8, pady=(6, 0))
+            tk.Label(card, text=value, bg="#f8fafc", fg=color, font=("Calibri", 13, "bold")).pack(anchor="w", padx=8, pady=(0, 7))
+
+        body = ttk.Frame(root)
+        body.grid(row=2, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        ttk.Label(body, text="Income", font=FONT_UI).grid(row=0, column=0, sticky="w", pady=(2, 4))
+        ttk.Label(body, text="Expenses", font=FONT_UI).grid(row=0, column=1, sticky="w", pady=(2, 4), padx=(10, 0))
+
+        left = ttk.Frame(body)
+        left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        right = ttk.Frame(body)
+        right.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
+        right.rowconfigure(0, weight=1)
+        right.columnconfigure(0, weight=1)
+
+        cols = ("category", "amount")
+        tv_in = ttk.Treeview(left, columns=cols, show="headings", selectmode="none")
+        tv_in.heading("category", text="Category", anchor="w")
+        tv_in.heading("amount", text="Amount", anchor="e")
+        tv_in.column("category", width=220, anchor="w", stretch=True)
+        tv_in.column("amount", width=120, anchor="e", stretch=False)
+        tv_in.grid(row=0, column=0, sticky="nsew")
+
+        tv_exp = ttk.Treeview(right, columns=cols, show="headings", selectmode="none")
+        tv_exp.heading("category", text="Category", anchor="w")
+        tv_exp.heading("amount", text="Amount", anchor="e")
+        tv_exp.column("category", width=220, anchor="w", stretch=True)
+        tv_exp.column("amount", width=120, anchor="e", stretch=False)
+        tv_exp.grid(row=0, column=0, sticky="nsew")
+
+        sb_in = ttk.Scrollbar(left, orient="vertical", command=tv_in.yview)
+        tv_in.configure(yscrollcommand=sb_in.set)
+        sb_in.grid(row=0, column=1, sticky="ns")
+
+        sb_exp = ttk.Scrollbar(right, orient="vertical", command=tv_exp.yview)
+        tv_exp.configure(yscrollcommand=sb_exp.set)
+        sb_exp.grid(row=0, column=1, sticky="ns")
+
+        for key, lbl in _BK_INC_COLS:
+            tv_in.insert("", "end", values=(lbl, _fmt_money(s.get(key, 0))))
+        tv_in.insert("", "end", values=("TOTAL INCOME", _fmt_money(total_in)))
+
+        for key, lbl in _BK_EXP_COLS:
+            tv_exp.insert("", "end", values=(lbl, _fmt_money(s.get(key, 0))))
+        tv_exp.insert("", "end", values=("TOTAL EXPENSES", _fmt_money(total_out)))
+
+        bf = ttk.Frame(root)
+        bf.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        btn(bf, "Close", dlg.destroy).pack(side="right")
 
     def _export_csv(self):
         year = int(self._year_var.get())
