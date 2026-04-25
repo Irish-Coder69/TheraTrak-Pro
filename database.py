@@ -218,6 +218,7 @@ def initialize_db():
     _migrate_session_notes_table()
     _migrate_users_table()
     _migrate_provider_settings_table()
+    _migrate_bookkeeping_tables()
     _seed_dsm_codes()
 
 
@@ -602,6 +603,160 @@ def count_users() -> int:
     n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     conn.close()
     return n
+
+
+# ─── Bookkeeping ───────────────────────────────────────────────────────────────
+
+_BOOKKEEPING_TABLES = """
+CREATE TABLE IF NOT EXISTS bookkeeping_entries (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_date       TEXT NOT NULL,
+    check_number     TEXT DEFAULT '',
+    payee            TEXT DEFAULT '',
+    memo             TEXT DEFAULT '',
+    is_tax_deductible INTEGER DEFAULT 0,
+    inc_client       REAL DEFAULT 0.0,
+    inc_insurance    REAL DEFAULT 0.0,
+    inc_other        REAL DEFAULT 0.0,
+    exp_rent         REAL DEFAULT 0.0,
+    exp_utilities    REAL DEFAULT 0.0,
+    exp_office       REAL DEFAULT 0.0,
+    exp_insurance    REAL DEFAULT 0.0,
+    exp_phone        REAL DEFAULT 0.0,
+    exp_professional REAL DEFAULT 0.0,
+    exp_advertising  REAL DEFAULT 0.0,
+    exp_misc         REAL DEFAULT 0.0,
+    created_at       TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS bookkeeping_settings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    year            INTEGER NOT NULL UNIQUE,
+    opening_balance REAL DEFAULT 0.0
+);
+"""
+
+
+def _migrate_bookkeeping_tables():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.executescript(_BOOKKEEPING_TABLES)
+    conn.commit()
+    conn.close()
+
+
+def get_bookkeeping_entries(year: int, month: int = 0):
+    """Return entries for a given year.  month=0 means all months."""
+    conn = get_connection()
+    if month:
+        month_str = f"{year}-{month:02d}"
+        rows = conn.execute(
+            "SELECT * FROM bookkeeping_entries WHERE strftime('%Y-%m', entry_date)=? ORDER BY entry_date, id",
+            (month_str,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM bookkeeping_entries WHERE strftime('%Y', entry_date)=? ORDER BY entry_date, id",
+            (str(year),)
+        ).fetchall()
+    conn.close()
+    return rows
+
+
+def save_bookkeeping_entry(data: dict):
+    conn = get_connection()
+    cur = conn.cursor()
+    eid = data.pop("id", None)
+    cols = list(data.keys())
+    vals = list(data.values())
+    if eid is None:
+        placeholders = ",".join(["?"] * len(cols))
+        col_str = ",".join(cols)
+        cur.execute(f"INSERT INTO bookkeeping_entries ({col_str}) VALUES ({placeholders})", vals)
+        eid = cur.lastrowid
+    else:
+        set_str = ",".join([f"{c}=?" for c in cols])
+        vals.append(eid)
+        cur.execute(f"UPDATE bookkeeping_entries SET {set_str} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+    return eid
+
+
+def delete_bookkeeping_entry(eid: int):
+    conn = get_connection()
+    conn.execute("DELETE FROM bookkeeping_entries WHERE id=?", (eid,))
+    conn.commit()
+    conn.close()
+
+
+def get_bookkeeping_opening_balance(year: int) -> float:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT opening_balance FROM bookkeeping_settings WHERE year=?", (year,)
+    ).fetchone()
+    conn.close()
+    return float(row["opening_balance"]) if row else 0.0
+
+
+def save_bookkeeping_opening_balance(year: int, balance: float):
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO bookkeeping_settings (year, opening_balance) VALUES (?,?) "
+        "ON CONFLICT(year) DO UPDATE SET opening_balance=excluded.opening_balance",
+        (year, balance)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_bookkeeping_annual_summary(year: int) -> dict:
+    """Return column totals for the full year."""
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT
+            SUM(inc_client) AS inc_client,
+            SUM(inc_insurance) AS inc_insurance,
+            SUM(inc_other) AS inc_other,
+            SUM(exp_rent) AS exp_rent,
+            SUM(exp_utilities) AS exp_utilities,
+            SUM(exp_office) AS exp_office,
+            SUM(exp_insurance) AS exp_insurance,
+            SUM(exp_phone) AS exp_phone,
+            SUM(exp_professional) AS exp_professional,
+            SUM(exp_advertising) AS exp_advertising,
+            SUM(exp_misc) AS exp_misc
+           FROM bookkeeping_entries
+           WHERE strftime('%Y', entry_date)=?""",
+        (str(year),)
+    ).fetchone()
+    conn.close()
+    return {k: float(row[k] or 0) for k in row.keys()} if row else {}
+
+
+def get_bookkeeping_monthly_summary(year: int) -> list:
+    """Return per-month totals for the year (list of dicts, one per month that has data)."""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT strftime('%m', entry_date) AS month,
+            SUM(inc_client) AS inc_client,
+            SUM(inc_insurance) AS inc_insurance,
+            SUM(inc_other) AS inc_other,
+            SUM(exp_rent) AS exp_rent,
+            SUM(exp_utilities) AS exp_utilities,
+            SUM(exp_office) AS exp_office,
+            SUM(exp_insurance) AS exp_insurance,
+            SUM(exp_phone) AS exp_phone,
+            SUM(exp_professional) AS exp_professional,
+            SUM(exp_advertising) AS exp_advertising,
+            SUM(exp_misc) AS exp_misc
+           FROM bookkeeping_entries
+           WHERE strftime('%Y', entry_date)=?
+           GROUP BY month ORDER BY month""",
+        (str(year),)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_user_by_username(username: str):

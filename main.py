@@ -3146,6 +3146,474 @@ class SettingsTab(ttk.Frame):
         messagebox.showinfo("Template Saved", f"Billing CSV template saved to:\n{path}")
 
 
+# ─── Bookkeeping ───────────────────────────────────────────────────────────────
+
+_BK_MONTHS = ["All", "January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December"]
+
+_BK_INC_COLS  = [("inc_client",       "Client Fees"),
+                  ("inc_insurance",    "Ins. Pay."),
+                  ("inc_other",        "Other Inc.")]
+_BK_EXP_COLS  = [("exp_rent",         "Rent"),
+                  ("exp_utilities",    "Utilities"),
+                  ("exp_office",       "Office Sup."),
+                  ("exp_insurance",    "Ins. Exp."),
+                  ("exp_phone",        "Phone"),
+                  ("exp_professional", "Prof. Fees"),
+                  ("exp_advertising",  "Advertising"),
+                  ("exp_misc",         "Misc.")]
+
+
+class BookkeepingEntryDialog(tk.Toplevel):
+    """Add / Edit a single bookkeeping entry."""
+
+    def __init__(self, parent, entry=None, on_save=None):
+        super().__init__(parent)
+        apply_window_icon(self)
+        self.on_save = on_save
+        self._entry  = dict(entry) if entry else {}
+        self.title("Edit Entry" if entry else "New Entry")
+        self.resizable(False, False)
+        self._vars: dict[str, tk.StringVar] = {}
+        self._tax_var = tk.BooleanVar(value=bool(self._entry.get("is_tax_deductible", 0)))
+        self._build()
+        self._load()
+        self.grab_set()
+        self.transient(parent)
+
+    def _mkvar(self, key: str) -> tk.StringVar:
+        v = tk.StringVar()
+        self._vars[key] = v
+        return v
+
+    def _money_entry(self, parent, key: str, row: int, col: int, label: str):
+        ttk.Label(parent, text=label).grid(row=row, column=col, sticky="e", padx=(6, 2), pady=2)
+        e = ttk.Entry(parent, textvariable=self._mkvar(key), width=10)
+        e.grid(row=row, column=col + 1, sticky="w", padx=(0, 6), pady=2)
+
+    def _build(self):
+        pad = ttk.Frame(self, padding=12)
+        pad.pack(fill="both", expand=True)
+
+        # ── Top row: date / check / payee / memo / tax ──
+        top = lframe(pad, "Entry Details")
+        top.pack(fill="x", pady=(0, 8))
+        top.columnconfigure(1, weight=1)
+        top.columnconfigure(3, weight=2)
+
+        ttk.Label(top, text="Date *").grid(row=0, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(top, textvariable=self._mkvar("entry_date"), width=14).grid(
+            row=0, column=1, sticky="w", padx=(0, 8), pady=3)
+
+        ttk.Label(top, text="Check #").grid(row=0, column=2, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(top, textvariable=self._mkvar("check_number"), width=12).grid(
+            row=0, column=3, sticky="w", padx=(0, 8), pady=3)
+
+        ttk.Label(top, text="Payee / Description").grid(row=1, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(top, textvariable=self._mkvar("payee"), width=34).grid(
+            row=1, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
+
+        ttk.Label(top, text="Memo").grid(row=2, column=0, sticky="e", padx=(4, 2), pady=3)
+        ttk.Entry(top, textvariable=self._mkvar("memo"), width=34).grid(
+            row=2, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
+
+        ttk.Checkbutton(top, text="Tax Deductible", variable=self._tax_var).grid(
+            row=3, column=0, columnspan=4, sticky="w", padx=6, pady=3)
+
+        # ── Income ──
+        inc = lframe(pad, "Money In (Income)")
+        inc.pack(fill="x", pady=(0, 8))
+        for i, (key, label) in enumerate(_BK_INC_COLS):
+            self._money_entry(inc, key, 0, i * 2, label)
+
+        # ── Expenses ──
+        exp = lframe(pad, "Money Out (Expenses)")
+        exp.pack(fill="x", pady=(0, 8))
+        for i, (key, label) in enumerate(_BK_EXP_COLS):
+            r, c = divmod(i, 4)
+            self._money_entry(exp, key, r, c * 2, label)
+
+        # ── Buttons ──
+        bf = ttk.Frame(pad)
+        bf.pack(fill="x", pady=(4, 0))
+        btn(bf, "Save", self._save, "Accent.TButton").pack(side="right", padx=4)
+        btn(bf, "Cancel", self.destroy).pack(side="right")
+
+    def _load(self):
+        for key, var in self._vars.items():
+            raw = self._entry.get(key, "")
+            if key == "entry_date" and not raw:
+                raw = current_date_str()
+            var.set(str(raw) if raw not in (None, 0, 0.0, "") else
+                    ("" if key in ("entry_date", "check_number", "payee", "memo") else ""))
+        # Format money fields
+        for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
+            v = self._entry.get(key, 0.0)
+            self._vars[key].set("" if not v else f"{float(v):.2f}")
+
+    def _save(self):
+        date_str = self._vars["entry_date"].get().strip()
+        if not date_str:
+            messagebox.showerror("Required", "Date is required.", parent=self)
+            return
+        # Normalise date
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y"):
+            try:
+                date_str = datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+        else:
+            messagebox.showerror("Invalid Date", "Enter date as YYYY-MM-DD or MM/DD/YYYY.", parent=self)
+            return
+
+        def _money(key):
+            try:
+                return round(float(self._vars[key].get() or 0), 2)
+            except ValueError:
+                return 0.0
+
+        data = {
+            "entry_date":       date_str,
+            "check_number":     self._vars["check_number"].get().strip(),
+            "payee":            self._vars["payee"].get().strip(),
+            "memo":             self._vars["memo"].get().strip(),
+            "is_tax_deductible": int(self._tax_var.get()),
+        }
+        for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
+            data[key] = _money(key)
+
+        if "id" in self._entry:
+            data["id"] = self._entry["id"]
+
+        db.save_bookkeeping_entry(data)
+        if self.on_save:
+            self.on_save()
+        self.destroy()
+
+
+class BookkeepingTab(ttk.Frame):
+    """Dome-style simplified bookkeeping ledger."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        today = date.today()
+        self._year_var  = tk.StringVar(value=str(today.year))
+        self._month_var = tk.StringVar(value="All")
+        self._build()
+        self.refresh()
+
+    # ── Build UI ────────────────────────────────────────────────────────────────
+
+    def _build(self):
+        # Toolbar
+        tb = ttk.Frame(self, padding=(8, 6))
+        tb.pack(fill="x")
+
+        btn(tb, "+ New Entry", self._new_entry, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "Edit",        self._edit_entry).pack(side="left", padx=2)
+        btn(tb, "Delete",      self._delete_entry, "Danger.TButton").pack(side="left", padx=2)
+
+        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        btn(tb, "Opening Balance", self._set_opening_balance).pack(side="left", padx=2)
+        btn(tb, "Monthly Summary", self._monthly_summary).pack(side="left", padx=2)
+        btn(tb, "Annual Summary",  self._annual_summary).pack(side="left", padx=2)
+        btn(tb, "Export CSV",      self._export_csv).pack(side="left", padx=2)
+
+        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8)
+
+        ttk.Label(tb, text="Year:").pack(side="left")
+        years = [str(y) for y in range(date.today().year + 1, 2019, -1)]
+        ttk.Combobox(tb, textvariable=self._year_var, values=years, width=6,
+                     state="readonly").pack(side="left", padx=3)
+        self._year_var.trace_add("write", lambda *a: self.refresh())
+
+        ttk.Label(tb, text="Month:").pack(side="left", padx=(8, 0))
+        ttk.Combobox(tb, textvariable=self._month_var, values=_BK_MONTHS, width=11,
+                     state="readonly").pack(side="left", padx=3)
+        self._month_var.trace_add("write", lambda *a: self.refresh())
+
+        self._lbl_count = ttk.Label(tb, text="", foreground=MUTED)
+        self._lbl_count.pack(side="right", padx=8)
+
+        # Treeview with both scrollbars
+        frm = ttk.Frame(self)
+        frm.pack(fill="both", expand=True, padx=8, pady=4)
+
+        cols = (["date", "ck", "payee", "memo", "tax"] +
+                [k for k, _ in _BK_INC_COLS] +
+                [k for k, _ in _BK_EXP_COLS] +
+                ["balance"])
+        self._cols = cols
+
+        self.tv = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
+
+        hdrs = (
+            [("Date", 80), ("Ck #", 55), ("Payee / Description", 180), ("Memo", 130), ("Tax", 38)] +
+            [(lbl, 88) for _, lbl in _BK_INC_COLS] +
+            [(lbl, 80) for _, lbl in _BK_EXP_COLS] +
+            [("Balance", 92)]
+        )
+        for (hdr, w), col in zip(hdrs, cols):
+            anchor = "e" if col not in ("date", "ck", "payee", "memo", "tax") else "w"
+            self.tv.heading(col, text=hdr, anchor="w")
+            self.tv.column(col, width=w, minwidth=w, stretch=False, anchor=anchor)
+
+        vsb = ttk.Scrollbar(frm, orient="vertical",   command=self.tv.yview)
+        hsb = ttk.Scrollbar(frm, orient="horizontal",  command=self.tv.xview)
+        self.tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tv.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        frm.columnconfigure(0, weight=1)
+        frm.rowconfigure(0, weight=1)
+
+        self.tv.bind("<Double-1>", lambda e: self._edit_entry())
+
+        # Status bar showing period totals
+        sb = ttk.Frame(self, padding=(8, 3))
+        sb.pack(fill="x", side="bottom")
+        self._lbl_totals = ttk.Label(sb, text="", foreground=MUTED, font=FONT_SM)
+        self._lbl_totals.pack(side="left")
+
+    # ── Data ────────────────────────────────────────────────────────────────────
+
+    def refresh(self):
+        self.tv.delete(*self.tv.get_children())
+        year  = int(self._year_var.get())
+        month_idx = _BK_MONTHS.index(self._month_var.get())  # 0 = All
+
+        rows = db.get_bookkeeping_entries(year, month_idx)
+
+        # Compute running balance starting from opening balance
+        balance = db.get_bookkeeping_opening_balance(year)
+        # If showing a specific month, sum all prior entries first
+        if month_idx:
+            prior = db.get_bookkeeping_entries(year, 0)
+            month_str = f"{year}-{month_idx:02d}"
+            for r in prior:
+                if r["entry_date"] < month_str:
+                    total_in  = sum(r[k] or 0 for k, _ in _BK_INC_COLS)
+                    total_out = sum(r[k] or 0 for k, _ in _BK_EXP_COLS)
+                    balance  += total_in - total_out
+
+        total_in_period  = 0.0
+        total_out_period = 0.0
+
+        for r in rows:
+            total_in  = sum(float(r[k] or 0) for k, _ in _BK_INC_COLS)
+            total_out = sum(float(r[k] or 0) for k, _ in _BK_EXP_COLS)
+            balance  += total_in - total_out
+            total_in_period  += total_in
+            total_out_period += total_out
+
+            tax_mark = "✓" if r["is_tax_deductible"] else ""
+
+            def _m(v):
+                f = float(v or 0)
+                return f"${f:,.2f}" if f else ""
+
+            values = (
+                [fmt_date(r["entry_date"]),
+                 r["check_number"] or "",
+                 r["payee"] or "",
+                 r["memo"] or "",
+                 tax_mark] +
+                [_m(r[k]) for k, _ in _BK_INC_COLS] +
+                [_m(r[k]) for k, _ in _BK_EXP_COLS] +
+                [f"${balance:,.2f}"]
+            )
+            tag = "odd" if len(self.tv.get_children()) % 2 == 0 else "even"
+            self.tv.insert("", "end", iid=str(r["id"]), values=values, tags=(tag,))
+
+        self.tv.tag_configure("odd",  background=ROW_ODD)
+        self.tv.tag_configure("even", background=ROW_EVEN)
+
+        n = len(rows)
+        self._lbl_count.config(text=f"{n} entr{'y' if n == 1 else 'ies'}")
+        net = total_in_period - total_out_period
+        sign = "+" if net >= 0 else ""
+        self._lbl_totals.config(
+            text=(f"Period:  Income ${total_in_period:,.2f}   "
+                  f"Expenses ${total_out_period:,.2f}   "
+                  f"Net {sign}${net:,.2f}   "
+                  f"Closing Balance ${balance:,.2f}")
+        )
+
+    def _selected_id(self):
+        sel = self.tv.selection()
+        return int(sel[0]) if sel else None
+
+    # ── Actions ─────────────────────────────────────────────────────────────────
+
+    def _new_entry(self):
+        BookkeepingEntryDialog(self, on_save=self.refresh)
+
+    def _edit_entry(self):
+        eid = self._selected_id()
+        if not eid:
+            messagebox.showinfo("Select Entry", "Please select an entry to edit.", parent=self)
+            return
+        conn = db.get_connection()
+        row  = conn.execute("SELECT * FROM bookkeeping_entries WHERE id=?", (eid,)).fetchone()
+        conn.close()
+        if row:
+            BookkeepingEntryDialog(self, entry=dict(row), on_save=self.refresh)
+
+    def _delete_entry(self):
+        eid = self._selected_id()
+        if not eid:
+            messagebox.showinfo("Select Entry", "Please select an entry to delete.", parent=self)
+            return
+        if messagebox.askyesno("Confirm Delete", "Delete this entry? This cannot be undone.", parent=self):
+            db.delete_bookkeeping_entry(eid)
+            self.refresh()
+
+    def _set_opening_balance(self):
+        year = int(self._year_var.get())
+        current = db.get_bookkeeping_opening_balance(year)
+        dlg = tk.Toplevel(self)
+        apply_window_icon(dlg)
+        dlg.title(f"Opening Balance — {year}")
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        dlg.grab_set()
+        ttk.Label(dlg, text=f"Opening Bank Balance for {year}:", padding=(12, 8)).pack(anchor="w")
+        var = tk.StringVar(value=f"{current:.2f}")
+        ttk.Entry(dlg, textvariable=var, width=18).pack(padx=12, pady=4)
+        def _save():
+            try:
+                val = float(var.get())
+            except ValueError:
+                messagebox.showerror("Invalid", "Enter a valid dollar amount.", parent=dlg)
+                return
+            db.save_bookkeeping_opening_balance(year, val)
+            dlg.destroy()
+            self.refresh()
+        bf = ttk.Frame(dlg, padding=(12, 8))
+        bf.pack(fill="x")
+        btn(bf, "Save", _save, "Accent.TButton").pack(side="right", padx=4)
+        btn(bf, "Cancel", dlg.destroy).pack(side="right")
+
+    def _monthly_summary(self):
+        year = int(self._year_var.get())
+        months = db.get_bookkeeping_monthly_summary(year)
+        if not months:
+            messagebox.showinfo("Monthly Summary", f"No entries found for {year}.", parent=self)
+            return
+        dlg = tk.Toplevel(self)
+        apply_window_icon(dlg)
+        dlg.title(f"Monthly Summary — {year}")
+        dlg.resizable(True, True)
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.geometry("900x420")
+
+        frm = ttk.Frame(dlg, padding=8)
+        frm.pack(fill="both", expand=True)
+
+        cols = ["month", "total_in", "total_out", "net"] + [k for k, _ in _BK_INC_COLS] + [k for k, _ in _BK_EXP_COLS]
+        hdrs = ["Month", "Total In", "Total Out", "Net"] + [lbl for _, lbl in _BK_INC_COLS] + [lbl for _, lbl in _BK_EXP_COLS]
+        tv2 = ttk.Treeview(frm, columns=cols, show="headings")
+        for col, hdr in zip(cols, hdrs):
+            tv2.heading(col, text=hdr, anchor="w")
+            tv2.column(col, width=90, anchor="e" if col != "month" else "w", stretch=False)
+        tv2.column("month", width=100)
+
+        hsb2 = ttk.Scrollbar(frm, orient="horizontal", command=tv2.xview)
+        tv2.configure(xscrollcommand=hsb2.set)
+        tv2.pack(fill="both", expand=True)
+        hsb2.pack(fill="x")
+
+        for r in months:
+            m_idx = int(r["month"])
+            m_name = _BK_MONTHS[m_idx] if m_idx < len(_BK_MONTHS) else r["month"]
+            ti = sum(float(r.get(k, 0) or 0) for k, _ in _BK_INC_COLS)
+            to = sum(float(r.get(k, 0) or 0) for k, _ in _BK_EXP_COLS)
+            net = ti - to
+            sign = "+" if net >= 0 else ""
+            values = (
+                [m_name, f"${ti:,.2f}", f"${to:,.2f}", f"{sign}${net:,.2f}"] +
+                [f"${float(r.get(k, 0) or 0):,.2f}" for k, _ in _BK_INC_COLS] +
+                [f"${float(r.get(k, 0) or 0):,.2f}" for k, _ in _BK_EXP_COLS]
+            )
+            tv2.insert("", "end", values=values)
+
+        btn(dlg, "Close", dlg.destroy).pack(side="right", padx=8, pady=6)
+
+    def _annual_summary(self):
+        year = int(self._year_var.get())
+        s = db.get_bookkeeping_annual_summary(year)
+        if not s:
+            messagebox.showinfo("Annual Summary", f"No entries found for {year}.", parent=self)
+            return
+        total_in  = sum(s.get(k, 0) for k, _ in _BK_INC_COLS)
+        total_out = sum(s.get(k, 0) for k, _ in _BK_EXP_COLS)
+        net = total_in - total_out
+        opening = db.get_bookkeeping_opening_balance(year)
+        closing = opening + net
+
+        lines = [f"Annual Summary — {year}", "=" * 40, ""]
+        lines.append("INCOME")
+        for key, lbl in _BK_INC_COLS:
+            lines.append(f"  {lbl:<22} ${s.get(key, 0):>10,.2f}")
+        lines.append(f"  {'TOTAL INCOME':<22} ${total_in:>10,.2f}")
+        lines.append("")
+        lines.append("EXPENSES")
+        for key, lbl in _BK_EXP_COLS:
+            lines.append(f"  {lbl:<22} ${s.get(key, 0):>10,.2f}")
+        lines.append(f"  {'TOTAL EXPENSES':<22} ${total_out:>10,.2f}")
+        lines.append("")
+        lines.append("=" * 40)
+        sign = "+" if net >= 0 else ""
+        lines.append(f"  {'Net Income':<22} {sign}${net:>10,.2f}")
+        lines.append(f"  {'Opening Balance':<22} ${opening:>10,.2f}")
+        lines.append(f"  {'Closing Balance':<22} ${closing:>10,.2f}")
+
+        dlg = tk.Toplevel(self)
+        apply_window_icon(dlg)
+        dlg.title(f"Annual Summary — {year}")
+        dlg.resizable(False, False)
+        dlg.transient(self)
+        dlg.grab_set()
+        txt = tk.Text(dlg, font=FONT_MONO, width=50, height=len(lines) + 2, padx=12, pady=8)
+        txt.pack(fill="both", expand=True, padx=8, pady=8)
+        txt.insert("1.0", "\n".join(lines))
+        txt.config(state="disabled")
+        btn(dlg, "Close", dlg.destroy).pack(side="right", padx=8, pady=6)
+
+    def _export_csv(self):
+        year = int(self._year_var.get())
+        month_idx = _BK_MONTHS.index(self._month_var.get())
+        rows = db.get_bookkeeping_entries(year, month_idx)
+        if not rows:
+            messagebox.showinfo("No Data", "No entries to export.", parent=self)
+            return
+        path = filedialog.asksaveasfilename(
+            title="Export Bookkeeping CSV",
+            defaultextension=".csv",
+            initialfile=f"bookkeeping_{year}.csv",
+            filetypes=[("CSV Files", "*.csv"), ("All", "*.*")])
+        if not path:
+            return
+        import csv as _csv
+        headers = (["Date", "Check #", "Payee", "Memo", "Tax Deductible"] +
+                   [lbl for _, lbl in _BK_INC_COLS] +
+                   [lbl for _, lbl in _BK_EXP_COLS])
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            w = _csv.writer(f)
+            w.writerow(headers)
+            for r in rows:
+                w.writerow(
+                    [r["entry_date"], r["check_number"] or "", r["payee"] or "",
+                     r["memo"] or "", "Yes" if r["is_tax_deductible"] else "No"] +
+                    [f"{float(r[k] or 0):.2f}" for k, _ in _BK_INC_COLS] +
+                    [f"{float(r[k] or 0):.2f}" for k, _ in _BK_EXP_COLS]
+                )
+        messagebox.showinfo("Exported", f"Saved to:\n{path}", parent=self)
+
+
 class VersionManagerDialog(tk.Toplevel):
     def __init__(self, parent, on_change=None):
         super().__init__(parent)
@@ -3297,19 +3765,21 @@ class TheraTrakApp(tk.Tk):
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True)
 
-        self.tab_patients = PatientsTab(self.nb)
-        self.tab_sessions = SessionNotesTab(self.nb)
-        self.tab_billing  = BillingTab(self.nb)
-        self.tab_cms      = CMS1500Tab(self.nb)
-        self.tab_reports  = ReportsTab(self.nb)
-        self.tab_settings = SettingsTab(self.nb)
+        self.tab_patients    = PatientsTab(self.nb)
+        self.tab_sessions    = SessionNotesTab(self.nb)
+        self.tab_billing     = BillingTab(self.nb)
+        self.tab_cms         = CMS1500Tab(self.nb)
+        self.tab_bookkeeping = BookkeepingTab(self.nb)
+        self.tab_reports     = ReportsTab(self.nb)
+        self.tab_settings    = SettingsTab(self.nb)
 
-        self.nb.add(self.tab_patients, text="  Patients  ")
-        self.nb.add(self.tab_sessions, text="  Session Notes  ")
-        self.nb.add(self.tab_billing,  text="  Billing  ")
-        self.nb.add(self.tab_cms,      text="  CMS-1500  ")
-        self.nb.add(self.tab_reports,  text="  Reports  ")
-        self.nb.add(self.tab_settings, text="  Settings / Import  ")
+        self.nb.add(self.tab_patients,    text="  Patients  ")
+        self.nb.add(self.tab_sessions,    text="  Session Notes  ")
+        self.nb.add(self.tab_billing,     text="  Billing  ")
+        self.nb.add(self.tab_cms,         text="  CMS-1500  ")
+        self.nb.add(self.tab_bookkeeping, text="  Bookkeeping  ")
+        self.nb.add(self.tab_reports,     text="  Reports  ")
+        self.nb.add(self.tab_settings,    text="  Settings / Import  ")
 
     def _build_statusbar(self):
         sb = tk.Frame(self, bg="#e2e8f0", height=24)
@@ -3341,8 +3811,9 @@ class TheraTrakApp(tk.Tk):
         nav_menu.add_command(label="Session Notes",   command=lambda: self.nb.select(1))
         nav_menu.add_command(label="Billing",         command=lambda: self.nb.select(2))
         nav_menu.add_command(label="CMS-1500",        command=lambda: self.nb.select(3))
-        nav_menu.add_command(label="Reports",         command=lambda: self.nb.select(4))
-        nav_menu.add_command(label="Settings/Import", command=lambda: self.nb.select(5))
+        nav_menu.add_command(label="Bookkeeping",     command=lambda: self.nb.select(4))
+        nav_menu.add_command(label="Reports",         command=lambda: self.nb.select(5))
+        nav_menu.add_command(label="Settings/Import", command=lambda: self.nb.select(6))
         nav_menu.add_command(label="Provider Profile", command=self._open_provider_profile)
         menubar.add_cascade(label="Navigate", menu=nav_menu)
 
