@@ -3167,12 +3167,18 @@ _BK_EXP_COLS  = [("exp_rent",         "Rent"),
 class BookkeepingEntryDialog(tk.Toplevel):
     """Add / Edit a single bookkeeping entry."""
 
-    def __init__(self, parent, entry=None, on_save=None):
+    def __init__(self, parent, entry=None, on_save=None, preset=None):
         super().__init__(parent)
         apply_window_icon(self)
         self.on_save = on_save
         self._entry  = dict(entry) if entry else {}
-        self.title("Edit Entry" if entry else "New Entry")
+        self._preset = dict(preset or {})
+        self._is_edit = bool(entry)
+        if self._is_edit:
+            self.title("Edit Entry")
+        else:
+            kind = self._preset.get("quick_kind")
+            self.title(f"New {kind}" if kind in ("Expense", "Income") else "New Entry")
         self.resizable(True, True)
 
         self._inc_map = {label: key for key, label in _BK_INC_COLS}
@@ -3302,6 +3308,8 @@ class BookkeepingEntryDialog(tk.Toplevel):
         # ── Buttons ──
         bf = ttk.Frame(pad)
         bf.pack(fill="x", pady=(4, 0))
+        if not self._is_edit:
+            btn(bf, "Save + New", lambda: self._save(keep_open=True)).pack(side="right", padx=4)
         btn(bf, "Save", self._save, "Accent.TButton").pack(side="right", padx=4)
         btn(bf, "Cancel", self.destroy).pack(side="right")
 
@@ -3342,9 +3350,34 @@ class BookkeepingEntryDialog(tk.Toplevel):
             self._on_quick_kind_changed()
             self._quick_mode_var.set(False)
 
+        # Apply workflow preset only for brand-new entries.
+        if not self._is_edit:
+            preset_date = str(self._preset.get("entry_date") or "").strip()
+            if preset_date:
+                self._vars["entry_date"].set(preset_date)
+
+            preset_kind = str(self._preset.get("quick_kind") or "").strip()
+            if preset_kind in ("Expense", "Income"):
+                self._quick_kind_var.set(preset_kind)
+                self._on_quick_kind_changed()
+
+            preset_cat = str(self._preset.get("quick_category") or "").strip()
+            if preset_cat:
+                values = set(self._quick_cat_cb.cget("values"))
+                if preset_cat in values:
+                    self._quick_cat_var.set(preset_cat)
+
         self._set_detail_visibility()
 
-    def _save(self):
+    def _reset_for_next_entry(self):
+        self._vars["check_number"].set("")
+        self._vars["payee"].set("")
+        self._vars["memo"].set("")
+        self._quick_amt_var.set("")
+        for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
+            self._vars[key].set("")
+
+    def _save(self, keep_open=False):
         date_str = self._vars["entry_date"].get().strip()
         if not date_str:
             messagebox.showerror("Required", "Date is required.", parent=self)
@@ -3412,6 +3445,11 @@ class BookkeepingEntryDialog(tk.Toplevel):
         db.save_bookkeeping_entry(data)
         if self.on_save:
             self.on_save()
+
+        if keep_open and not self._is_edit:
+            self._reset_for_next_entry()
+            return
+
         self.destroy()
 
 
@@ -3441,7 +3479,9 @@ class BookkeepingTab(ttk.Frame):
     def _build(self):
         tb = ttk.Frame(self, padding=(8, 6))
         tb.pack(fill="x")
-        btn(tb, "+ New Entry", self._new_entry, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "+ New Expense", self._new_expense, "Accent.TButton").pack(side="left", padx=4)
+        btn(tb, "+ New Income", self._new_income, "Accent.TButton").pack(side="left", padx=2)
+        btn(tb, "+ New Entry", self._new_entry).pack(side="left", padx=2)
         btn(tb, "Edit", self._edit_entry).pack(side="left", padx=2)
         btn(tb, "Delete", self._delete_entry, "Danger.TButton").pack(side="left", padx=2)
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8)
@@ -3516,8 +3556,15 @@ class BookkeepingTab(ttk.Frame):
 
         sb = ttk.Frame(self, padding=(8, 3))
         sb.pack(fill="x", side="bottom")
+        self._lbl_workflow = ttk.Label(
+            sb,
+            text="Workflow: 1) Set Year/Month  2) New Expense/Income  3) Save + New for batch entry  4) Review totals",
+            foreground=MUTED,
+            font=FONT_SM,
+        )
+        self._lbl_workflow.pack(side="left")
         self._lbl_totals = ttk.Label(sb, text="", foreground=MUTED, font=FONT_SM)
-        self._lbl_totals.pack(side="left")
+        self._lbl_totals.pack(side="right")
 
     def _on_xscroll(self, *args):
         self.tv.xview(*args)
@@ -3684,8 +3731,30 @@ class BookkeepingTab(ttk.Frame):
         except (ValueError, TypeError):
             return None
 
+    def _default_entry_date_for_filter(self):
+        year = int(self._year_var.get())
+        month_idx = _BK_MONTHS.index(self._month_var.get())
+        if month_idx == 0:
+            return current_date_str()
+        return f"{year:04d}-{month_idx:02d}-01"
+
+    def _open_new_entry(self, quick_kind=None):
+        preset = {"entry_date": self._default_entry_date_for_filter()}
+        if quick_kind in ("Expense", "Income"):
+            preset["quick_kind"] = quick_kind
+            cats = _BK_EXP_COLS if quick_kind == "Expense" else _BK_INC_COLS
+            if cats:
+                preset["quick_category"] = cats[0][1]
+        BookkeepingEntryDialog(self, on_save=self.refresh, preset=preset)
+
     def _new_entry(self):
-        BookkeepingEntryDialog(self, on_save=self.refresh)
+        self._open_new_entry()
+
+    def _new_expense(self):
+        self._open_new_entry("Expense")
+
+    def _new_income(self):
+        self._open_new_entry("Income")
 
     def _edit_entry(self):
         eid = self._selected_id()
