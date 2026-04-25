@@ -3452,7 +3452,9 @@ class TheraTrakApp(tk.Tk):
             "  • CMS-1500 fillable PDF (preview + print)\n"
             "  • Reports & CSV data export\n"
             "  • Data migration from Notes 444 files\n\n"
-            f"Database: {db.DB_PATH}"
+            f"Database: {db.DB_PATH}\n\n"
+            "Created By: Judson M. Fitzpatrick, Irish_Codeers Programming\n"
+            f"© {datetime.now().year} Irish_Codeers Programming. All rights reserved."
         )
 
     def _parse_version_tuple(self, text):
