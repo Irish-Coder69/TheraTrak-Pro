@@ -3174,8 +3174,17 @@ class BookkeepingEntryDialog(tk.Toplevel):
         self._entry  = dict(entry) if entry else {}
         self.title("Edit Entry" if entry else "New Entry")
         self.resizable(True, True)
+
+        self._inc_map = {label: key for key, label in _BK_INC_COLS}
+        self._exp_map = {label: key for key, label in _BK_EXP_COLS}
+
         self._vars: dict[str, tk.StringVar] = {}
         self._tax_var = tk.BooleanVar(value=bool(self._entry.get("is_tax_deductible", 0)))
+        self._quick_mode_var = tk.BooleanVar(value=True)
+        self._quick_kind_var = tk.StringVar(value="Expense")
+        self._quick_cat_var = tk.StringVar(value="")
+        self._quick_amt_var = tk.StringVar(value="")
+
         self._build()
         self._load()
         self.grab_set()
@@ -3200,11 +3209,23 @@ class BookkeepingEntryDialog(tk.Toplevel):
         e = ttk.Entry(parent, textvariable=self._mkvar(key), width=10)
         e.grid(row=row, column=col + 1, sticky="w", padx=(0, 6), pady=2)
 
+    def _on_quick_kind_changed(self):
+        labels = [lbl for _, lbl in (_BK_INC_COLS if self._quick_kind_var.get() == "Income" else _BK_EXP_COLS)]
+        self._quick_cat_cb.configure(values=labels)
+        if self._quick_cat_var.get() not in labels:
+            self._quick_cat_var.set(labels[0] if labels else "")
+
+    def _set_detail_visibility(self):
+        if self._quick_mode_var.get():
+            self._detail_wrap.pack_forget()
+        else:
+            self._detail_wrap.pack(fill="x", pady=(4, 0))
+
     def _build(self):
         pad = ttk.Frame(self, padding=12)
         pad.pack(fill="both", expand=True)
 
-        # ── Top row: date / check / payee / memo / tax ──
+        # ── Core details ──
         top = lframe(pad, "Entry Details")
         top.pack(fill="x", pady=(0, 8))
         top.columnconfigure(1, weight=1)
@@ -3226,17 +3247,53 @@ class BookkeepingEntryDialog(tk.Toplevel):
         ttk.Entry(top, textvariable=self._mkvar("memo"), width=34).grid(
             row=2, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
 
-        ttk.Checkbutton(top, text="Tax Deductible", variable=self._tax_var).grid(
-            row=3, column=0, columnspan=4, sticky="w", padx=6, pady=3)
+        # ── Quick entry (default) ──
+        quick = lframe(pad, "Quick Entry")
+        quick.pack(fill="x", pady=(0, 8))
+        quick.columnconfigure(7, weight=1)
 
-        # ── Income ──
-        inc = lframe(pad, "Money In (Income)")
+        ttk.Label(quick, text="Type").grid(row=0, column=0, sticky="e", padx=(6, 2), pady=4)
+        ttk.Radiobutton(
+            quick, text="Expense", variable=self._quick_kind_var, value="Expense",
+            command=self._on_quick_kind_changed
+        ).grid(row=0, column=1, sticky="w", padx=(0, 8), pady=4)
+        ttk.Radiobutton(
+            quick, text="Income", variable=self._quick_kind_var, value="Income",
+            command=self._on_quick_kind_changed
+        ).grid(row=0, column=2, sticky="w", padx=(0, 12), pady=4)
+
+        ttk.Label(quick, text="Category").grid(row=0, column=3, sticky="e", padx=(6, 2), pady=4)
+        self._quick_cat_cb = ttk.Combobox(
+            quick, textvariable=self._quick_cat_var, width=18, state="readonly"
+        )
+        self._quick_cat_cb.grid(row=0, column=4, sticky="w", padx=(0, 12), pady=4)
+
+        ttk.Label(quick, text="Amount").grid(row=0, column=5, sticky="e", padx=(6, 2), pady=4)
+        ttk.Entry(quick, textvariable=self._quick_amt_var, width=12).grid(
+            row=0, column=6, sticky="w", padx=(0, 12), pady=4
+        )
+
+        ttk.Checkbutton(quick, text="Tax Deductible", variable=self._tax_var).grid(
+            row=1, column=0, columnspan=3, sticky="w", padx=6, pady=3
+        )
+        ttk.Checkbutton(
+            quick,
+            text="Show detailed amount fields",
+            variable=self._quick_mode_var,
+            onvalue=False,
+            offvalue=True,
+            command=self._set_detail_visibility,
+        ).grid(row=1, column=3, columnspan=4, sticky="w", padx=6, pady=3)
+
+        # ── Detailed fields (optional) ──
+        self._detail_wrap = ttk.Frame(pad)
+
+        inc = lframe(self._detail_wrap, "Money In (Income)")
         inc.pack(fill="x", pady=(0, 8))
         for i, (key, label) in enumerate(_BK_INC_COLS):
             self._money_entry(inc, key, 0, i * 2, label)
 
-        # ── Expenses ──
-        exp = lframe(pad, "Money Out (Expenses)")
+        exp = lframe(self._detail_wrap, "Money Out (Expenses)")
         exp.pack(fill="x", pady=(0, 8))
         for i, (key, label) in enumerate(_BK_EXP_COLS):
             r, c = divmod(i, 4)
@@ -3255,10 +3312,37 @@ class BookkeepingEntryDialog(tk.Toplevel):
                 raw = current_date_str()
             var.set(str(raw) if raw not in (None, 0, 0.0, "") else
                     ("" if key in ("entry_date", "check_number", "payee", "memo") else ""))
+
         # Format money fields
         for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
             v = self._entry.get(key, 0.0)
             self._vars[key].set("" if not v else f"{float(v):.2f}")
+
+        # Infer quick-entry values from existing data
+        non_zero = []
+        for key, label in _BK_INC_COLS + _BK_EXP_COLS:
+            amt = float(self._entry.get(key, 0) or 0)
+            if amt:
+                non_zero.append((key, label, amt))
+
+        if len(non_zero) == 1:
+            key, label, amt = non_zero[0]
+            self._quick_kind_var.set("Income" if key in dict(_BK_INC_COLS) else "Expense")
+            self._on_quick_kind_changed()
+            self._quick_cat_var.set(label)
+            self._quick_amt_var.set(f"{amt:.2f}")
+            self._quick_mode_var.set(True)
+        elif len(non_zero) == 0:
+            self._quick_kind_var.set("Expense")
+            self._on_quick_kind_changed()
+            self._quick_amt_var.set("")
+            self._quick_mode_var.set(True)
+        else:
+            self._quick_kind_var.set("Expense")
+            self._on_quick_kind_changed()
+            self._quick_mode_var.set(False)
+
+        self._set_detail_visibility()
 
     def _save(self):
         date_str = self._vars["entry_date"].get().strip()
@@ -3289,8 +3373,38 @@ class BookkeepingEntryDialog(tk.Toplevel):
             "memo":             self._vars["memo"].get().strip(),
             "is_tax_deductible": int(self._tax_var.get()),
         }
+
         for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
-            data[key] = _money(key)
+            data[key] = 0.0
+
+        if self._quick_mode_var.get():
+            cat_label = self._quick_cat_var.get().strip()
+            amt_text = self._quick_amt_var.get().strip()
+
+            if not cat_label:
+                messagebox.showerror("Required", "Choose a category.", parent=self)
+                return
+
+            try:
+                amount = round(float(amt_text or 0), 2)
+            except ValueError:
+                messagebox.showerror("Invalid", "Amount must be a number.", parent=self)
+                return
+
+            if amount <= 0:
+                messagebox.showerror("Required", "Enter an amount greater than zero.", parent=self)
+                return
+
+            cmap = self._inc_map if self._quick_kind_var.get() == "Income" else self._exp_map
+            cat_key = cmap.get(cat_label)
+            if not cat_key:
+                messagebox.showerror("Invalid", "Please choose a valid category.", parent=self)
+                return
+
+            data[cat_key] = amount
+        else:
+            for key, _ in _BK_INC_COLS + _BK_EXP_COLS:
+                data[key] = _money(key)
 
         if "id" in self._entry:
             data["id"] = self._entry["id"]
