@@ -3173,13 +3173,22 @@ class BookkeepingEntryDialog(tk.Toplevel):
         self.on_save = on_save
         self._entry  = dict(entry) if entry else {}
         self.title("Edit Entry" if entry else "New Entry")
-        self.resizable(False, False)
+        self.resizable(True, True)
         self._vars: dict[str, tk.StringVar] = {}
         self._tax_var = tk.BooleanVar(value=bool(self._entry.get("is_tax_deductible", 0)))
         self._build()
         self._load()
         self.grab_set()
         self.transient(parent)
+        self.after_idle(self._maximize)
+
+    def _maximize(self):
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            sw = self.winfo_screenwidth()
+            sh = self.winfo_screenheight()
+            self.geometry(f"{sw}x{sh}+0+0")
 
     def _mkvar(self, key: str) -> tk.StringVar:
         v = tk.StringVar()
