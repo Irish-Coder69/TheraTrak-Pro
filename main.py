@@ -3196,6 +3196,7 @@ class BookkeepingEntryDialog(tk.Toplevel):
         self.grab_set()
         self.transient(parent)
         self.after_idle(self._maximize)
+        self.after_idle(self._focus_initial_field)
 
     def _maximize(self):
         try:
@@ -3214,6 +3215,26 @@ class BookkeepingEntryDialog(tk.Toplevel):
         ttk.Label(parent, text=label).grid(row=row, column=col, sticky="e", padx=(6, 2), pady=2)
         e = ttk.Entry(parent, textvariable=self._mkvar(key), width=10)
         e.grid(row=row, column=col + 1, sticky="w", padx=(0, 6), pady=2)
+
+    def _bind_quick_workflow(self, widget, callback=None):
+        def _handler(_event=None):
+            if callback:
+                callback()
+            else:
+                widget.tk_focusNext().focus_set()
+            return "break"
+
+        widget.bind("<Return>", _handler)
+        widget.bind("<KP_Enter>", _handler)
+
+    def _focus_initial_field(self):
+        target = self._payee_entry if not self._is_edit else self._quick_amt_entry
+        target.focus_set()
+        if isinstance(target, ttk.Entry):
+            target.selection_range(0, "end")
+
+    def _submit_from_keyboard(self):
+        self._save(keep_open=not self._is_edit)
 
     def _on_quick_kind_changed(self):
         labels = [lbl for _, lbl in (_BK_INC_COLS if self._quick_kind_var.get() == "Income" else _BK_EXP_COLS)]
@@ -3238,20 +3259,20 @@ class BookkeepingEntryDialog(tk.Toplevel):
         top.columnconfigure(3, weight=2)
 
         ttk.Label(top, text="Date *").grid(row=0, column=0, sticky="e", padx=(4, 2), pady=3)
-        ttk.Entry(top, textvariable=self._mkvar("entry_date"), width=14).grid(
-            row=0, column=1, sticky="w", padx=(0, 8), pady=3)
+        self._date_entry = ttk.Entry(top, textvariable=self._mkvar("entry_date"), width=14)
+        self._date_entry.grid(row=0, column=1, sticky="w", padx=(0, 8), pady=3)
 
         ttk.Label(top, text="Check #").grid(row=0, column=2, sticky="e", padx=(4, 2), pady=3)
-        ttk.Entry(top, textvariable=self._mkvar("check_number"), width=12).grid(
-            row=0, column=3, sticky="w", padx=(0, 8), pady=3)
+        self._check_entry = ttk.Entry(top, textvariable=self._mkvar("check_number"), width=12)
+        self._check_entry.grid(row=0, column=3, sticky="w", padx=(0, 8), pady=3)
 
         ttk.Label(top, text="Payee / Description").grid(row=1, column=0, sticky="e", padx=(4, 2), pady=3)
-        ttk.Entry(top, textvariable=self._mkvar("payee"), width=34).grid(
-            row=1, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
+        self._payee_entry = ttk.Entry(top, textvariable=self._mkvar("payee"), width=34)
+        self._payee_entry.grid(row=1, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
 
         ttk.Label(top, text="Memo").grid(row=2, column=0, sticky="e", padx=(4, 2), pady=3)
-        ttk.Entry(top, textvariable=self._mkvar("memo"), width=34).grid(
-            row=2, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
+        self._memo_entry = ttk.Entry(top, textvariable=self._mkvar("memo"), width=34)
+        self._memo_entry.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=3)
 
         # ── Quick entry (default) ──
         quick = lframe(pad, "Quick Entry")
@@ -3275,9 +3296,8 @@ class BookkeepingEntryDialog(tk.Toplevel):
         self._quick_cat_cb.grid(row=0, column=4, sticky="w", padx=(0, 12), pady=4)
 
         ttk.Label(quick, text="Amount").grid(row=0, column=5, sticky="e", padx=(6, 2), pady=4)
-        ttk.Entry(quick, textvariable=self._quick_amt_var, width=12).grid(
-            row=0, column=6, sticky="w", padx=(0, 12), pady=4
-        )
+        self._quick_amt_entry = ttk.Entry(quick, textvariable=self._quick_amt_var, width=12)
+        self._quick_amt_entry.grid(row=0, column=6, sticky="w", padx=(0, 12), pady=4)
 
         ttk.Checkbutton(quick, text="Tax Deductible", variable=self._tax_var).grid(
             row=1, column=0, columnspan=3, sticky="w", padx=6, pady=3
@@ -3309,9 +3329,21 @@ class BookkeepingEntryDialog(tk.Toplevel):
         bf = ttk.Frame(pad)
         bf.pack(fill="x", pady=(4, 0))
         if not self._is_edit:
-            btn(bf, "Save + New", lambda: self._save(keep_open=True)).pack(side="right", padx=4)
-        btn(bf, "Save", self._save, "Accent.TButton").pack(side="right", padx=4)
+            self._save_new_btn = btn(bf, "Save + New", lambda: self._save(keep_open=True))
+            self._save_new_btn.pack(side="right", padx=4)
+        else:
+            self._save_new_btn = None
+        self._save_btn = btn(bf, "Save", self._save, "Accent.TButton")
+        self._save_btn.pack(side="right", padx=4)
         btn(bf, "Cancel", self.destroy).pack(side="right")
+
+        self._bind_quick_workflow(self._date_entry)
+        self._bind_quick_workflow(self._check_entry)
+        self._bind_quick_workflow(self._payee_entry)
+        self._bind_quick_workflow(self._memo_entry)
+        self._bind_quick_workflow(self._quick_cat_cb)
+        self._bind_quick_workflow(self._quick_amt_entry, self._submit_from_keyboard)
+        self.bind("<Escape>", lambda _event=None: self.destroy())
 
     def _load(self):
         for key, var in self._vars.items():
@@ -3448,6 +3480,7 @@ class BookkeepingEntryDialog(tk.Toplevel):
 
         if keep_open and not self._is_edit:
             self._reset_for_next_entry()
+            self.after_idle(self._focus_initial_field)
             return
 
         self.destroy()
